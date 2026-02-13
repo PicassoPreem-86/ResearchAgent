@@ -4,7 +4,7 @@ import { scrapeCompany } from './scraper.js'
 import type { ICP, DiscoveredCompany, GeoTarget } from '../types/prospect.js'
 import { geoTargetToQueryString, geoTargetToLabel, hasGeoSelections } from '../types/prospect.js'
 import { extractStructuredData } from './scraper.js'
-import { firecrawlScrape } from './firecrawl.js'
+import { firecrawlScrape, firecrawlSearch } from './firecrawl.js'
 import { getDomainOverview, getOrganicCompetitors, formatTraffic } from './semrush.js'
 
 const client = new OpenAI()
@@ -33,9 +33,9 @@ async function fetchHtml(url: string): Promise<string | null> {
   }
 }
 
-// --- Google search scraping ---
+// --- Web search (Firecrawl primary, Google scraping fallback) ---
 
-export async function searchGoogle(
+async function searchGoogleDirect(
   query: string
 ): Promise<{ title: string; link: string; snippet: string }[]> {
   try {
@@ -46,12 +46,10 @@ export async function searchGoogle(
     const $ = cheerio.load(html)
     const results: { title: string; link: string; snippet: string }[] = []
 
-    // Google wraps each result in a div with class 'g' or similar structures
     $('div.g, div[data-sokoban-container]').each((_, el) => {
       const anchor = $(el).find('a[href^="http"]').first()
       const link = anchor.attr('href') || ''
       const title = $(el).find('h3').first().text().trim()
-      // Snippet is typically in a div after the link block
       const snippet =
         $(el).find('[data-sncf], .VwiC3b, [style*="-webkit-line-clamp"]').first().text().trim() ||
         $(el).find('span.st, div.s').first().text().trim()
@@ -61,7 +59,6 @@ export async function searchGoogle(
       }
     })
 
-    // Fallback: if the above didn't pick up results, try broader parsing
     if (results.length === 0) {
       $('a[href^="/url?q="]').each((_, el) => {
         const rawHref = $(el).attr('href') || ''
@@ -80,6 +77,23 @@ export async function searchGoogle(
   } catch {
     return []
   }
+}
+
+export async function searchGoogle(
+  query: string
+): Promise<{ title: string; link: string; snippet: string }[]> {
+  // Try Firecrawl search first — structured results, no HTML parsing
+  const fcResults = await firecrawlSearch(query, 20)
+  if (fcResults.length > 0) {
+    return fcResults.map((r) => ({
+      title: r.title,
+      link: r.url,
+      snippet: r.description,
+    }))
+  }
+
+  // Fallback to direct Google scraping
+  return searchGoogleDirect(query)
 }
 
 // --- Product Hunt search ---

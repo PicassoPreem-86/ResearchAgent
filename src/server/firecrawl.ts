@@ -45,15 +45,47 @@ export async function firecrawlScrape(url: string): Promise<FirecrawlResult | nu
   }
 }
 
-export async function firecrawlBatchScrape(
-  urls: string[]
-): Promise<Map<string, FirecrawlResult>> {
-  const results = new Map<string, FirecrawlResult>()
-  const settled = await Promise.allSettled(
-    urls.map(async (url) => {
-      const r = await firecrawlScrape(url)
-      if (r) results.set(url, r)
+export interface FirecrawlSearchResult {
+  title: string
+  url: string
+  description: string
+}
+
+export async function firecrawlSearch(
+  query: string,
+  limit = 20
+): Promise<FirecrawlSearchResult[]> {
+  const apiKey = process.env.FIRECRAWL_API_KEY
+  if (!apiKey) return []
+
+  try {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 15000)
+
+    const res = await fetch(`${FIRECRAWL_API}/search`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({ query, limit }),
+      signal: controller.signal,
     })
-  )
-  return results
+
+    clearTimeout(timeout)
+    if (!res.ok) return []
+
+    const json = await res.json()
+    if (!json.success || !Array.isArray(json.data)) return []
+
+    return json.data
+      .filter((r: Record<string, unknown>) => r.url && typeof r.url === 'string')
+      .map((r: Record<string, unknown>) => ({
+        title: (r.title as string) || '',
+        url: r.url as string,
+        description: (r.description as string) || '',
+      }))
+  } catch {
+    return []
+  }
 }
