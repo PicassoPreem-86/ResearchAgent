@@ -289,17 +289,17 @@ export function DiscoverInput({ onSearchLookalike, onSearchICP, onSaveICP, loadI
                   className="flex items-center gap-1.5 mx-auto text-xs text-white/25 hover:text-white/40 transition-colors"
                 >
                   <MapPin className="w-3 h-3" />
-                  <span>{showLookalikeGeo ? 'Hide' : 'Filter by'} region</span>
+                  <span>{showLookalikeGeo ? 'Hide' : 'Filter by'} location</span>
                   <ChevronDown className={`w-3 h-3 transition-transform duration-200 ${showLookalikeGeo ? 'rotate-180' : ''}`} />
                 </button>
                 <AnimatePresence>
                   {showLookalikeGeo && (
                     <motion.div
-                      initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: 'auto', opacity: 1 }}
-                      exit={{ height: 0, opacity: 0 }}
+                      initial={{ height: 0, opacity: 0, overflow: 'hidden' }}
+                      animate={{ height: 'auto', opacity: 1, overflow: 'visible', transitionEnd: { overflow: 'visible' } }}
+                      exit={{ height: 0, opacity: 0, overflow: 'hidden' }}
                       transition={{ duration: 0.2 }}
-                      className="overflow-hidden mt-2 max-w-md mx-auto"
+                      className="mt-2 max-w-md mx-auto"
                     >
                       <GeoPicker value={lookalikeGeo} onChange={setLookalikeGeo} disabled={isLoading} />
                     </motion.div>
