@@ -1,21 +1,21 @@
 import { motion } from 'framer-motion'
-import { Building2, Users, UserSearch, BarChart3, Mail } from 'lucide-react'
+import { Search, Users, UserSearch, BarChart3, Mail } from 'lucide-react'
 
 interface TalentProgressProps {
   message: string
   progress: number
-  companyName?: string
+  roleName?: string
 }
 
 const STAGES = [
-  { icon: Building2, label: 'Researching company', threshold: 15 },
-  { icon: Users, label: 'Extracting team', threshold: 35 },
+  { icon: Search, label: 'Searching platforms', threshold: 15 },
+  { icon: Users, label: 'Finding candidates', threshold: 35 },
   { icon: UserSearch, label: 'Enriching profiles', threshold: 55 },
-  { icon: BarChart3, label: 'Analyzing fit', threshold: 70 },
-  { icon: Mail, label: 'Recruiting strategy', threshold: 85 },
+  { icon: BarChart3, label: 'Scoring fit', threshold: 70 },
+  { icon: Mail, label: 'Drafting outreach', threshold: 85 },
 ]
 
-export function TalentProgress({ message, progress, companyName }: TalentProgressProps) {
+export function TalentProgress({ message, progress, roleName }: TalentProgressProps) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -42,15 +42,15 @@ export function TalentProgress({ message, progress, companyName }: TalentProgres
         </div>
       </div>
 
-      {/* Company name being searched */}
-      {companyName && (
+      {/* Role being searched */}
+      {roleName && (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           className="mb-6"
         >
-          <span className="text-xs text-white/25 uppercase tracking-wider font-semibold">Searching</span>
-          <p className="text-sm font-semibold text-white/60 mt-1">{companyName}</p>
+          <span className="text-xs text-white/25 uppercase tracking-wider font-semibold">Searching for</span>
+          <p className="text-sm font-semibold text-white/60 mt-1">{roleName}</p>
         </motion.div>
       )}
 

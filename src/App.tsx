@@ -511,7 +511,7 @@ export default function App() {
                 <div className="inline-flex p-4 rounded-2xl bg-red-500/10 border border-red-500/20 mb-5">
                   <AlertCircle className="w-8 h-8 text-red-400" />
                 </div>
-                <h2 className="text-xl font-bold text-white/90 mb-2">Talent search failed</h2>
+                <h2 className="text-xl font-bold text-white/90 mb-2">Candidate search failed</h2>
                 <p className="text-sm text-white/40 mb-6">{talent.error || 'Something went wrong. Please try again.'}</p>
                 <motion.button
                   onClick={handleReset}

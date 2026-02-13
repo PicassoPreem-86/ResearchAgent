@@ -12,7 +12,7 @@ import { saveReport, getHistory, deleteReport } from './history.js'
 import { generatePdf, generateComparisonPdf } from './pdf.js'
 import { discoverByICP, discoverLookalike, discoverByKeywords } from './discover.js'
 import { saveICP, loadICP } from './icp.js'
-import { extractDetailedPeople, analyzeTalent } from './talent.js'
+import { searchTalent } from './talent.js'
 import type { ResearchProgress, EmailTone, SellerContext, ReportTemplate, ProspectReport, ComparisonReport, ICP, DiscoverResults, TalentReport } from '../types/prospect.js'
 
 const app = new Hono()
@@ -571,29 +571,16 @@ app.post('/api/discover/search', async (c) => {
 
 app.post('/api/talent/search', async (c) => {
   try {
-    const body = await c.req.json<{ domain: string; targetRole: string; targetSkills: string[] }>()
-    if (!body.domain || !body.targetRole) {
-      return c.json({ error: 'domain and targetRole are required' }, 400)
+    const body = await c.req.json<{ targetRole: string; targetSkills: string[]; location?: string; seniority?: string }>()
+    if (!body.targetRole) {
+      return c.json({ error: 'targetRole is required' }, 400)
     }
 
-    const domain = body.domain.replace(/^https?:\/\//, '').replace(/\/.*$/, '')
-    const targetSkills = body.targetSkills || []
-
-    // Scrape and analyze company
-    const scrapedData = await scrapeCompany(domain)
-    const companyReport = await analyzeCompany(domain, scrapedData)
-    saveReport(companyReport)
-
-    // Extract people
-    const people = extractDetailedPeople(scrapedData)
-
-    // Analyze talent
-    const report = await analyzeTalent(
-      { name: companyReport.company.name, domain },
-      people,
+    const report = await searchTalent(
       body.targetRole,
-      targetSkills,
-      companyReport
+      body.targetSkills || [],
+      body.location,
+      body.seniority
     )
 
     return c.json(report)
@@ -605,13 +592,10 @@ app.post('/api/talent/search', async (c) => {
 
 app.post('/api/talent/search/stream', async (c) => {
   try {
-    const body = await c.req.json<{ domain: string; targetRole: string; targetSkills: string[] }>()
-    if (!body.domain || !body.targetRole) {
-      return c.json({ error: 'domain and targetRole are required' }, 400)
+    const body = await c.req.json<{ targetRole: string; targetSkills: string[]; location?: string; seniority?: string }>()
+    if (!body.targetRole) {
+      return c.json({ error: 'targetRole is required' }, 400)
     }
-
-    const domain = body.domain.replace(/^https?:\/\//, '').replace(/\/.*$/, '')
-    const targetSkills = body.targetSkills || []
 
     return streamSSE(c, async (stream) => {
       const sendProgress = async (message: string, progress: number) => {
@@ -622,36 +606,22 @@ app.post('/api/talent/search/stream', async (c) => {
       }
 
       try {
-        await sendProgress('Researching company...', 10)
-        const scrapedData = await scrapeCompany(domain)
-
-        await sendProgress('Analyzing company profile...', 25)
-        const companyReport = await analyzeCompany(domain, scrapedData)
-        saveReport(companyReport)
-
-        await sendProgress('Extracting team members...', 40)
-        const people = extractDetailedPeople(scrapedData)
-        await sendProgress(`Found ${people.length} team members, enriching profiles...`, 55)
-
-        const report = await analyzeTalent(
-          { name: companyReport.company.name, domain },
-          people,
+        let progressStep = 10
+        const report = await searchTalent(
           body.targetRole,
-          targetSkills,
-          companyReport,
+          body.targetSkills || [],
+          body.location,
+          body.seniority,
           async (msg) => {
-            const progressMap: Record<string, number> = {
-              'Analyzing talent fit...': 70,
-              'Generating recruiting strategy...': 85,
-            }
-            await sendProgress(msg, progressMap[msg] || 75)
+            progressStep = Math.min(progressStep + 20, 90)
+            await sendProgress(msg, progressStep)
           }
         )
 
         await stream.writeSSE({
           data: JSON.stringify({
             stage: 'complete',
-            message: 'Talent analysis complete',
+            message: 'Candidate search complete',
             progress: 100,
             data: report,
           }),

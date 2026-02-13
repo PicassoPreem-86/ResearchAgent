@@ -6,7 +6,7 @@ import type { OutreachEmail } from '@/types/prospect'
 interface EmailPreviewProps {
   email: OutreachEmail
   emails?: OutreachEmail[]
-  recipientDomain: string
+  recipientDomain?: string
 }
 
 function CopyButton({ text, label }: { text: string; label: string }) {
@@ -163,7 +163,7 @@ export function EmailPreview({ email, emails, recipientDomain }: EmailPreviewPro
       <div className="px-5 pt-4 space-y-2.5 border-b border-white/[0.04] pb-4">
         <div className="flex items-center gap-3">
           <span className="text-xs text-white/25 w-12 text-right shrink-0">To</span>
-          <span className="text-sm text-white/50">prospect@{recipientDomain}</span>
+          <span className="text-sm text-white/50">prospect@{recipientDomain || 'company.com'}</span>
         </div>
         <div className="flex items-center gap-3">
           <span className="text-xs text-white/25 w-12 text-right shrink-0">Subject</span>

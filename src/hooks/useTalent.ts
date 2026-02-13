@@ -12,7 +12,7 @@ interface UseTalentReturn {
   talentReport: TalentReport | null
   error: string | null
   isSearching: boolean
-  searchTalent: (domain: string, targetRole: string, targetSkills: string[]) => void
+  searchTalent: (targetRole: string, targetSkills: string[], location?: string, seniority?: string) => void
   reset: () => void
 }
 
@@ -40,25 +40,23 @@ export function useTalent(): UseTalentReturn {
     setError(null)
   }, [])
 
-  const searchTalent = useCallback((domain: string, targetRole: string, targetSkills: string[]) => {
+  const searchTalent = useCallback((targetRole: string, targetSkills: string[], location?: string, seniority?: string) => {
     setError(null)
     setTalentReport(null)
-    setProgress({ stage: 'scraping', message: 'Starting talent search...', progress: 5 })
+    setProgress({ stage: 'scraping', message: 'Starting candidate search...', progress: 5 })
 
     const abortController = new AbortController()
     abortRef.current = abortController
 
-    const cleaned = domain.replace(/^https?:\/\//, '').replace(/\/.*$/, '')
-
     fetch('/api/talent/search/stream', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ domain: cleaned, targetRole, targetSkills }),
+      body: JSON.stringify({ targetRole, targetSkills, location, seniority }),
       signal: abortController.signal,
     })
       .then((response) => {
         if (!response.ok) {
-          throw new Error(`Talent search failed (${response.status})`)
+          throw new Error(`Candidate search failed (${response.status})`)
         }
 
         const reader = response.body?.getReader()
@@ -82,7 +80,7 @@ export function useTalent(): UseTalentReturn {
 
                   if (data.stage === 'complete' && data.data) {
                     setTalentReport(data.data as TalentReport)
-                    setProgress({ stage: 'complete', message: 'Talent analysis complete', progress: 100 })
+                    setProgress({ stage: 'complete', message: 'Candidate search complete', progress: 100 })
                   } else if (data.stage === 'error') {
                     setError(data.message || 'Something went wrong')
                     setProgress({ stage: 'error', message: data.message, progress: 0 })

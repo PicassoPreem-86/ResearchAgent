@@ -170,36 +170,25 @@ export interface TalentProfile {
   githubUrl?: string
   matchScore: number
   matchReasons: string[]
-  recruitingAngle: string
+  fitSummary: string
+  source?: string
+  currentCompany?: string
 }
 
 export interface TalentSearch {
   targetRole: string
   targetSkills: string[]
-  companyDomain: string
-}
-
-export interface TeamComposition {
-  departments: { name: string; count: number }[]
-  seniorityBreakdown: string
-  teamCulture: string
+  location?: string
+  seniority?: string
 }
 
 export interface TalentReport {
-  company: { name: string; domain: string }
+  search: { role: string; skills: string[]; location?: string; seniority?: string }
   targetRole: string
   profiles: TalentProfile[]
-  talentInsights: TalentInsight[]
   recruitingEmail: OutreachEmail
   personalizedOutreach: { name: string; email: OutreachEmail }[]
-  teamComposition: TeamComposition
   generatedAt: string
-}
-
-export interface TalentInsight {
-  title: string
-  description: string
-  signal: 'positive' | 'negative' | 'neutral'
 }
 
 export type ResearchStage =

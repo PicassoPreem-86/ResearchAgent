@@ -1,310 +1,154 @@
-import * as cheerio from 'cheerio'
 import OpenAI from 'openai'
-import type { ScrapedCompanyData } from './scraper.js'
-import type { TalentProfile, TalentReport, TalentInsight, ProspectReport, OutreachEmail, TeamComposition } from '../types/prospect.js'
+import { searchGoogle } from './discover.js'
+import type { TalentProfile, TalentReport, OutreachEmail } from '../types/prospect.js'
 
 const client = new OpenAI()
 
-const USER_AGENT =
-  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
-
-// --- Department inference ---
-
-function inferDepartment(role: string): string {
-  const lower = role.toLowerCase()
-  if (/engineer|developer|devops|sre|qa|frontend|backend|fullstack|full-stack|software|cto|vp.*eng/i.test(lower)) return 'Engineering'
-  if (/design|ux|ui|creative|brand/i.test(lower)) return 'Design'
-  if (/product|pm|program manager/i.test(lower)) return 'Product'
-  if (/market|growth|content|seo|social|brand|cmw/i.test(lower)) return 'Marketing'
-  if (/sale|account|business dev|bdr|sdr|revenue|cro/i.test(lower)) return 'Sales'
-  if (/data|analy|machine learn|ai|ml|scientist/i.test(lower)) return 'Data & AI'
-  if (/hr|people|talent|recruit|culture/i.test(lower)) return 'People'
-  if (/finance|accounting|cfo|controller/i.test(lower)) return 'Finance'
-  if (/operations|ops|coo|logistics|supply/i.test(lower)) return 'Operations'
-  if (/legal|compliance|counsel/i.test(lower)) return 'Legal'
-  if (/ceo|founder|co-founder|chief.*officer|president|exec/i.test(lower)) return 'Leadership'
-  if (/support|success|customer/i.test(lower)) return 'Customer Success'
-  return 'Other'
+function isEngineeringRole(role: string): boolean {
+  return /engineer|developer|devops|sre|frontend|backend|fullstack|full-stack|software|programmer|coder|architect/i.test(role)
 }
 
-// --- Extract LinkedIn and GitHub URLs from page links ---
+// --- Search Google for LinkedIn profiles ---
 
-function extractSocialUrls(links: string[]): { linkedinUrls: Map<string, string>; githubUrls: Map<string, string> } {
-  const linkedinUrls = new Map<string, string>()
-  const githubUrls = new Map<string, string>()
+async function searchLinkedIn(
+  role: string,
+  skills: string[],
+  location?: string,
+  seniority?: string
+): Promise<{ name: string; title: string; snippet: string; url: string }[]> {
+  const queries: string[] = []
 
-  for (const link of links) {
-    const liMatch = link.match(/linkedin\.com\/in\/([a-zA-Z0-9\-_]+)/)
-    if (liMatch) {
-      const username = liMatch[1].toLowerCase()
-      linkedinUrls.set(username, link.startsWith('http') ? link : `https://${link}`)
-    }
-    const ghMatch = link.match(/github\.com\/([a-zA-Z0-9\-_]+)/)
-    if (ghMatch) {
-      const username = ghMatch[1].toLowerCase()
-      // Skip common non-user paths
-      if (!['orgs', 'topics', 'explore', 'marketplace', 'settings', 'features'].includes(username)) {
-        githubUrls.set(username, link.startsWith('http') ? link : `https://${link}`)
+  const skillsPart = skills.length > 0 ? skills.slice(0, 3).join(' ') : ''
+  const locationPart = location || ''
+  const seniorityPart = seniority && seniority !== 'any' ? seniority : ''
+
+  queries.push(`site:linkedin.com/in ${seniorityPart} "${role}" ${skillsPart} ${locationPart}`.trim())
+
+  if (skills.length > 0) {
+    queries.push(`site:linkedin.com/in "${role}" ${skills.slice(0, 2).join(' OR ')} ${locationPart}`.trim())
+  }
+
+  const results: { name: string; title: string; snippet: string; url: string }[] = []
+  const seenUrls = new Set<string>()
+
+  for (const query of queries) {
+    const googleResults = await searchGoogle(query)
+
+    for (const r of googleResults) {
+      if (!r.link.includes('linkedin.com/in/')) continue
+      if (seenUrls.has(r.link)) continue
+      seenUrls.add(r.link)
+
+      // LinkedIn titles: "John Doe - Senior Engineer - Company | LinkedIn"
+      const titleParts = r.title.replace(/\s*[|·]\s*LinkedIn\s*$/i, '').split(/\s*[-–—]\s*/)
+      const name = titleParts[0]?.trim() || ''
+      const title = titleParts.slice(1).join(' - ').trim() || ''
+
+      if (name && name.length > 2) {
+        results.push({ name, title, snippet: r.snippet, url: r.link })
       }
     }
   }
 
-  return { linkedinUrls, githubUrls }
+  return results.slice(0, 25)
 }
 
-// --- Extract detailed people from scraped data ---
+// --- Search Google for GitHub developer profiles ---
 
-export function extractDetailedPeople(scrapedData: ScrapedCompanyData): TalentProfile[] {
-  const allLinks: string[] = []
-  if (scrapedData.homepage?.links) allLinks.push(...scrapedData.homepage.links)
-  if (scrapedData.about?.links) allLinks.push(...scrapedData.about.links)
-  if (scrapedData.careers?.links) allLinks.push(...scrapedData.careers.links)
+async function searchGitHub(
+  role: string,
+  skills: string[]
+): Promise<{ name: string; title: string; snippet: string; url: string }[]> {
+  const skillsPart = skills.length > 0 ? skills.slice(0, 3).join(' ') : 'developer'
+  const query = `site:github.com "${skillsPart}" ${role} followers`
 
-  const { linkedinUrls, githubUrls } = extractSocialUrls(allLinks)
+  const googleResults = await searchGoogle(query)
+  const results: { name: string; title: string; snippet: string; url: string }[] = []
 
-  return scrapedData.teamMembers.map((member) => {
-    const nameParts = member.name.toLowerCase().split(/\s+/)
-    const firstName = nameParts[0] || ''
-    const lastName = nameParts[nameParts.length - 1] || ''
+  for (const r of googleResults) {
+    const ghMatch = r.link.match(/github\.com\/([a-zA-Z0-9\-_]+)\/?$/)
+    if (!ghMatch) continue
+    const username = ghMatch[1]
+    if (['orgs', 'topics', 'explore', 'marketplace', 'settings', 'features', 'trending', 'collections', 'about', 'pricing'].includes(username)) continue
 
-    // Try to match social URLs by name fragments
-    let linkedinUrl: string | undefined
-    let githubUrl: string | undefined
-
-    for (const [username, url] of linkedinUrls) {
-      if (username.includes(firstName) && username.includes(lastName)) {
-        linkedinUrl = url
-        break
-      }
+    const name = r.title.replace(/\s*·\s*GitHub\s*$/i, '').replace(/\([^)]*\)/, '').trim()
+    if (name && name.length > 2) {
+      results.push({ name, title: '', snippet: r.snippet, url: r.link })
     }
-    for (const [username, url] of githubUrls) {
-      if (username.includes(firstName) || username.includes(lastName)) {
-        githubUrl = url
-        break
-      }
-    }
+  }
 
-    return {
-      name: member.name,
-      role: member.role,
-      department: inferDepartment(member.role),
-      skills: [],
-      linkedinUrl,
-      githubUrl,
-      matchScore: 0,
-      matchReasons: [],
-      recruitingAngle: '',
-    }
-  })
+  return results.slice(0, 10)
 }
 
-// --- Scrape public GitHub profile ---
+// --- Main talent search ---
 
-export async function scrapeGitHubProfile(
-  username: string
-): Promise<{ repos: number; languages: string[]; contributions: number; bio: string } | null> {
-  try {
-    const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 10000)
-    const res = await fetch(`https://github.com/${username}`, {
-      headers: { 'User-Agent': USER_AGENT },
-      signal: controller.signal,
-      redirect: 'follow',
-    })
-    clearTimeout(timeout)
-
-    if (!res.ok) return null
-    const html = await res.text()
-    const $ = cheerio.load(html)
-
-    // Bio
-    const bio = $('[data-bio-text], .p-note, .user-profile-bio').first().text().trim()
-
-    // Repo count
-    const repoText = $('a[href$="?tab=repositories"] span, nav a[href*="tab=repositories"] .Counter').first().text().trim()
-    const repos = parseInt(repoText.replace(/[^0-9]/g, ''), 10) || 0
-
-    // Languages from pinned repos or language stats
-    const languages = new Set<string>()
-    $('[itemprop="programmingLanguage"], span[class*="language-color"] + span, [data-color-mode] .repo-language-color + span').each((_, el) => {
-      const lang = $(el).text().trim()
-      if (lang) languages.add(lang)
-    })
-    // Also try the language bar on profile
-    $('.f6.color-fg-muted span, .pinned-item-desc ~ p span').each((_, el) => {
-      const text = $(el).text().trim()
-      if (text && text.length < 30 && !text.includes(' ')) languages.add(text)
-    })
-
-    // Contributions
-    const contribText = $('h2.f4.text-normal.mb-2, .js-yearly-contributions h2').first().text().trim()
-    const contribMatch = contribText.match(/([\d,]+)\s*contribution/)
-    const contributions = contribMatch ? parseInt(contribMatch[1].replace(/,/g, ''), 10) : 0
-
-    return {
-      repos,
-      languages: [...languages].slice(0, 10),
-      contributions,
-      bio,
-    }
-  } catch {
-    return null
-  }
-}
-
-// --- Poaching signals ---
-
-export function inferPoachingSignals(companyReport: ProspectReport): TalentInsight[] {
-  const insights: TalentInsight[] = []
-
-  // Hiring velocity signals
-  const jobCount = companyReport.jobInsights.length
-  if (jobCount >= 5) {
-    insights.push({
-      title: 'High hiring volume',
-      description: `Company has ${jobCount}+ open roles, suggesting rapid growth. Team members may be stretched thin and open to offers with better work-life balance.`,
-      signal: 'positive',
-    })
-  }
-
-  // Department concentration
-  const deptCounts = new Map<string, number>()
-  for (const job of companyReport.jobInsights) {
-    const dept = job.department
-    deptCounts.set(dept, (deptCounts.get(dept) || 0) + 1)
-  }
-  for (const [dept, count] of deptCounts) {
-    if (count >= 3) {
-      insights.push({
-        title: `Heavy ${dept} hiring`,
-        description: `Multiple open roles in ${dept} may indicate turnover or team scaling challenges. Current team members could be overworked.`,
-        signal: 'positive',
-      })
-    }
-  }
-
-  // Funding stage signals
-  const funding = companyReport.financialSignals.fundingStage.toLowerCase()
-  if (funding.includes('seed') || funding.includes('early')) {
-    insights.push({
-      title: 'Early-stage company',
-      description: 'Early-stage employees often wear many hats. Senior talent may be looking for more focused roles with better compensation.',
-      signal: 'positive',
-    })
-  }
-  if (funding.includes('growth') || funding.includes('series-c') || funding.includes('series-d')) {
-    insights.push({
-      title: 'Growth stage dynamics',
-      description: 'Growth-stage companies often experience cultural shifts. Early employees who prefer startup culture may be open to new opportunities.',
-      signal: 'positive',
-    })
-  }
-
-  // Risk-based signals
-  for (const flag of companyReport.risks.flags) {
-    if (flag.severity === 'high') {
-      insights.push({
-        title: `Risk factor: ${flag.title}`,
-        description: `${flag.description} — this organizational risk may make employees receptive to outreach.`,
-        signal: 'positive',
-      })
-    }
-  }
-
-  // News-based signals
-  const newsItems = companyReport.company.recentNews || []
-  for (const news of newsItems) {
-    const lower = news.toLowerCase()
-    if (lower.includes('layoff') || lower.includes('reduction') || lower.includes('restructur')) {
-      insights.push({
-        title: 'Organizational disruption',
-        description: `Recent news mentions restructuring or layoffs. Remaining employees may feel uncertain about their future.`,
-        signal: 'positive',
-      })
-      break
-    }
-    if (lower.includes('acqui') || lower.includes('merger')) {
-      insights.push({
-        title: 'M&A activity',
-        description: 'Acquisition or merger activity creates uncertainty. Key talent often considers options during transitions.',
-        signal: 'positive',
-      })
-      break
-    }
-  }
-
-  // Negative signals (reasons NOT to poach)
-  if (companyReport.company.recentNews.some((n) => n.toLowerCase().includes('funding') || n.toLowerCase().includes('raised'))) {
-    insights.push({
-      title: 'Recent funding',
-      description: 'Fresh funding often means stock refreshes and retention bonuses. Talent may be harder to recruit right after a raise.',
-      signal: 'negative',
-    })
-  }
-
-  if (insights.length === 0) {
-    insights.push({
-      title: 'No strong signals detected',
-      description: 'No clear indicators of talent mobility. Standard outreach approaches recommended.',
-      signal: 'neutral',
-    })
-  }
-
-  return insights
-}
-
-// --- Main talent analysis ---
-
-export async function analyzeTalent(
-  company: { name: string; domain: string },
-  people: TalentProfile[],
+export async function searchTalent(
   targetRole: string,
   targetSkills: string[],
-  companyReport?: ProspectReport,
+  location?: string,
+  seniority?: string,
   onProgress?: (message: string) => Promise<void> | void
 ): Promise<TalentReport> {
-  await onProgress?.('Analyzing talent fit...')
+  await onProgress?.('Searching LinkedIn for matching profiles...')
 
-  // Enrich GitHub profiles for people who have them
-  const enrichedPeople = [...people]
-  for (let i = 0; i < enrichedPeople.length; i++) {
-    const person = enrichedPeople[i]
-    if (person.githubUrl) {
-      const ghMatch = person.githubUrl.match(/github\.com\/([a-zA-Z0-9\-_]+)/)
-      if (ghMatch) {
-        const ghProfile = await scrapeGitHubProfile(ghMatch[1])
-        if (ghProfile) {
-          person.skills = [...new Set([...person.skills, ...ghProfile.languages])]
-        }
-      }
+  const linkedInResults = await searchLinkedIn(targetRole, targetSkills, location, seniority)
+
+  let githubResults: { name: string; title: string; snippet: string; url: string }[] = []
+  if (isEngineeringRole(targetRole)) {
+    await onProgress?.('Searching GitHub for developers...')
+    githubResults = await searchGitHub(targetRole, targetSkills)
+  }
+
+  await onProgress?.('Analyzing candidate profiles...')
+
+  // Merge candidates, dedupe by name
+  const candidates: { name: string; title: string; snippet: string; url: string; source: string }[] = []
+
+  for (const r of linkedInResults) {
+    candidates.push({ ...r, source: 'linkedin' })
+  }
+  for (const r of githubResults) {
+    const nameLower = r.name.toLowerCase()
+    if (!candidates.some((c) => c.name.toLowerCase() === nameLower)) {
+      candidates.push({ ...r, source: 'github' })
     }
   }
 
-  await onProgress?.('Generating recruiting strategy...')
+  const emptyReport: TalentReport = {
+    search: { role: targetRole, skills: targetSkills, location, seniority },
+    targetRole,
+    profiles: [],
+    recruitingEmail: {
+      subject: `${targetRole} opportunity`,
+      body: `Hi [Name],\n\nWe're hiring a ${targetRole} and your background caught our attention.\n\nWould you be open to a quick chat?`,
+      personalizationNotes: ['No candidates found — try broadening your search'],
+      tone: 'casual',
+      variant: 'outreach',
+    },
+    personalizedOutreach: [],
+    generatedAt: new Date().toISOString(),
+  }
 
-  const talentInsights = companyReport ? inferPoachingSignals(companyReport) : []
+  if (candidates.length === 0) return emptyReport
 
-  // Build the people summary for AI
-  const peopleSummary = enrichedPeople.map((p, i) =>
-    `${i + 1}. ${p.name} — ${p.role} (${p.department})${p.skills.length > 0 ? ` | Skills: ${p.skills.join(', ')}` : ''}${p.linkedinUrl ? ' | Has LinkedIn' : ''}${p.githubUrl ? ' | Has GitHub' : ''}`
-  ).join('\n')
+  await onProgress?.('Scoring fit and drafting outreach...')
 
-  const companyContext = companyReport
-    ? `Company size: ${companyReport.company.estimatedSize}. Industry: ${companyReport.company.industry}. Funding: ${companyReport.financialSignals.fundingStage}. Pain points: ${companyReport.painPoints.map(p => p.title).join(', ')}.`
-    : `Company: ${company.name} (${company.domain})`
+  const candidateSummary = candidates
+    .map(
+      (c, i) =>
+        `${i + 1}. ${c.name} — ${c.title || 'No title'} (Source: ${c.source})${c.snippet ? `\n   Context: ${c.snippet}` : ''}\n   Profile: ${c.url}`
+    )
+    .join('\n')
 
-  const prompt = `You are an elite executive recruiter at a top-tier firm. Your outreach has a 40%+ response rate because you deeply research targets before reaching out.
+  const prompt = `You are a hiring manager's AI assistant helping find the best candidates for an open role.
 
 TARGET ROLE: ${targetRole}
-TARGET SKILLS: ${targetSkills.join(', ') || 'Not specified — infer from role title'}
+REQUIRED SKILLS: ${targetSkills.join(', ') || 'Not specified — infer from role title'}
+${location ? `PREFERRED LOCATION: ${location}` : ''}
+${seniority && seniority !== 'any' ? `SENIORITY LEVEL: ${seniority}` : ''}
 
-COMPANY CONTEXT:
-${companyContext}
-
-TEAM MEMBERS FOUND:
-${peopleSummary || 'No team members were found on the website.'}
-
-${talentInsights.length > 0 ? `TALENT SIGNALS:\n${talentInsights.map(t => `- [${t.signal}] ${t.title}: ${t.description}`).join('\n')}` : ''}
+CANDIDATE PROFILES FOUND:
+${candidateSummary}
 
 Respond with a JSON object:
 {
@@ -312,30 +156,27 @@ Respond with a JSON object:
     {
       "index": 1,
       "matchScore": 85,
-      "matchReasons": ["Specific reason 1 citing their actual role/skills", "Reason 2 about fit"],
-      "recruitingAngle": "2-3 sentences: Why this specific person might be open to a move right now, based on company signals and their likely career trajectory. What would motivate them to respond?",
-      "inferredSkills": ["skill1", "skill2", "skill3"]
+      "matchReasons": ["Specific reason citing their actual experience/skills", "Another relevant reason"],
+      "fitSummary": "2-3 sentences explaining why this person would be a strong candidate for the role. Focus on their experience, skills, and what they'd bring to the team.",
+      "inferredSkills": ["skill1", "skill2", "skill3"],
+      "currentCompany": "Company name if visible in their title/snippet, or null",
+      "department": "Engineering, Design, Product, Marketing, Sales, etc."
     }
   ],
-  "teamComposition": {
-    "departments": [{ "name": "Engineering", "count": 5 }],
-    "seniorityBreakdown": "Describe the seniority distribution — heavy on juniors? Top-heavy with VPs? Balanced?",
-    "teamCulture": "2-3 sentences inferring team culture from job listings, about page language, team composition, and company positioning. What's it probably like to work here?"
-  },
-  "recruitingEmail": {
-    "subject": "Compelling subject under 50 chars",
-    "body": "A master-class recruiting email (200-300 words). Open with something that proves you researched their company. Reference specific company details. Explain the opportunity in terms of what THEY care about (growth, impact, tech). End with a low-friction CTA.",
-    "personalizationNotes": ["Why this approach works for talent from this specific company"],
+  "outreachEmail": {
+    "subject": "Compelling subject under 50 chars about the opportunity",
+    "body": "A professional, warm outreach email (200-300 words). Lead with what makes the role exciting. Describe the opportunity in terms of growth, impact, and technology. End with a low-friction CTA. This is a general template.",
+    "personalizationNotes": ["Tips for customizing this template for individual candidates"],
     "tone": "casual",
-    "variant": "recruiting"
+    "variant": "outreach"
   },
   "personalizedOutreach": [
     {
       "name": "Person Name",
       "email": {
         "subject": "Personalized subject for THIS person under 50 chars",
-        "body": "150-200 word email personalized to THIS specific person. Reference their actual role, skills, and likely motivations based on their position at the company.",
-        "personalizationNotes": ["Why this approach works for this specific person"],
+        "body": "150-200 word email personalized to THIS specific candidate. Reference their actual experience and explain why they'd be great for this role.",
+        "personalizationNotes": ["Why this approach works for this person"],
         "tone": "casual",
         "variant": "personal"
       }
@@ -344,14 +185,13 @@ Respond with a JSON object:
 }
 
 RULES:
-- Score each person 0-100. Vary scores realistically — not everyone is a 70+.
-- matchReasons: MUST cite the person's actual role, department, and skills. No generic reasons.
-- recruitingAngle: MUST leverage company-specific signals (growth stage, pain points, hiring patterns, recent news).
-- inferredSkills: Infer 3-6 skills from their role title and department. Be specific (e.g., "React" not just "frontend").
-- teamComposition: Analyze the department distribution and seniority patterns. This is valuable strategic intel.
-- personalizedOutreach: Generate individual outreach for the TOP 3 matched profiles only. Each must be genuinely personalized.
-- recruitingEmail: The generic email must still reference 3+ specific details about the company.
-- If no team members found, return empty profiles but still generate the generic email and best-guess team composition.
+- Score each person 0-100 based on fit for the target role. Vary scores realistically — not everyone is a 70+.
+- matchReasons: MUST reference the person's actual title, experience, or skills from their profile. No generic reasons.
+- fitSummary: Focus on what makes them a GOOD HIRE — their strengths, relevant experience, what they'd bring. Do NOT focus on why they'd leave their current job.
+- inferredSkills: Infer 3-6 relevant skills from their title and context. Be specific (e.g., "React" not just "frontend").
+- personalizedOutreach: Generate for the TOP 3 matched candidates only. Each must be genuinely personalized.
+- outreachEmail: A warm, professional template focused on the opportunity you're offering.
+- If no meaningful info is available for a candidate, score them 30-50.
 - Return ONLY valid JSON`
 
   try {
@@ -360,74 +200,94 @@ RULES:
       max_tokens: 8000,
       response_format: { type: 'json_object' },
       messages: [
-        { role: 'system', content: 'You are an elite executive recruiter with a 40%+ response rate. Your outreach is deeply researched and personalized. Always respond with valid JSON only.' },
+        {
+          role: 'system',
+          content:
+            'You are an expert hiring assistant that helps teams find great candidates. Always respond with valid JSON only.',
+        },
         { role: 'user', content: prompt },
       ],
     })
 
     const text = response.choices[0]?.message?.content || '{}'
     const parsed = JSON.parse(text) as {
-      profiles: { index: number; matchScore: number; matchReasons: string[]; recruitingAngle: string; inferredSkills: string[] }[]
-      recruitingEmail: OutreachEmail
+      profiles: {
+        index: number
+        matchScore: number
+        matchReasons: string[]
+        fitSummary: string
+        inferredSkills: string[]
+        currentCompany?: string
+        department?: string
+      }[]
+      outreachEmail: OutreachEmail
       personalizedOutreach?: { name: string; email: OutreachEmail }[]
-      teamComposition?: TeamComposition
     }
 
-    // Merge AI scores into profiles
-    const scoreMap = new Map<number, typeof parsed.profiles[0]>()
+    const scoreMap = new Map<number, (typeof parsed.profiles)[0]>()
     for (const p of parsed.profiles || []) {
       scoreMap.set(p.index, p)
     }
 
-    for (let i = 0; i < enrichedPeople.length; i++) {
+    const profiles: TalentProfile[] = candidates.map((candidate, i) => {
       const aiData = scoreMap.get(i + 1)
-      if (aiData) {
-        enrichedPeople[i].matchScore = aiData.matchScore
-        enrichedPeople[i].matchReasons = aiData.matchReasons
-        enrichedPeople[i].recruitingAngle = aiData.recruitingAngle
-        enrichedPeople[i].skills = [...new Set([...enrichedPeople[i].skills, ...(aiData.inferredSkills || [])])]
+      return {
+        name: candidate.name,
+        role: candidate.title || targetRole,
+        department: aiData?.department || 'Unknown',
+        skills: aiData?.inferredSkills || [],
+        linkedinUrl: candidate.source === 'linkedin' ? candidate.url : undefined,
+        githubUrl: candidate.source === 'github' ? candidate.url : undefined,
+        matchScore: aiData?.matchScore ?? 40,
+        matchReasons: aiData?.matchReasons ?? [],
+        fitSummary: aiData?.fitSummary ?? '',
+        source: candidate.source,
+        currentCompany: aiData?.currentCompany || undefined,
       }
-    }
+    })
 
-    // Sort by match score
-    enrichedPeople.sort((a, b) => b.matchScore - a.matchScore)
-
-    const recruitingEmail = parsed.recruitingEmail || {
-      subject: `Opportunity at [Your Company] — ${targetRole}`,
-      body: `Hi [Name],\n\nI came across your profile at ${company.name} and was impressed by your background. We're looking for a ${targetRole} and I think you'd be a great fit.\n\nWould you be open to a quick chat?`,
-      personalizationNotes: ['Generic template — no AI analysis available'],
-      tone: 'casual' as const,
-      variant: 'recruiting',
-    }
-
-    const defaultTeamComp: TeamComposition = { departments: [], seniorityBreakdown: '', teamCulture: '' }
+    profiles.sort((a, b) => b.matchScore - a.matchScore)
 
     return {
-      company,
+      search: { role: targetRole, skills: targetSkills, location, seniority },
       targetRole,
-      profiles: enrichedPeople,
-      talentInsights,
-      recruitingEmail,
+      profiles,
+      recruitingEmail: parsed.outreachEmail || {
+        subject: `${targetRole} opportunity`,
+        body: `Hi [Name],\n\nWe're hiring a ${targetRole} and your background caught our attention.\n\nWould you be open to a quick chat?`,
+        personalizationNotes: ['Generic template'],
+        tone: 'casual',
+        variant: 'outreach',
+      },
       personalizedOutreach: parsed.personalizedOutreach || [],
-      teamComposition: parsed.teamComposition || defaultTeamComp,
       generatedAt: new Date().toISOString(),
     }
   } catch {
-    // Fallback if AI fails
+    const profiles: TalentProfile[] = candidates.map((c) => ({
+      name: c.name,
+      role: c.title || targetRole,
+      department: 'Unknown',
+      skills: [],
+      linkedinUrl: c.source === 'linkedin' ? c.url : undefined,
+      githubUrl: c.source === 'github' ? c.url : undefined,
+      matchScore: 40,
+      matchReasons: [],
+      fitSummary: '',
+      source: c.source,
+    }))
+
     return {
-      company,
+      search: { role: targetRole, skills: targetSkills, location, seniority },
       targetRole,
-      profiles: enrichedPeople,
-      talentInsights,
+      profiles,
       recruitingEmail: {
-        subject: `Opportunity — ${targetRole}`,
-        body: `Hi [Name],\n\nI noticed your work at ${company.name}. We're hiring for a ${targetRole} role and I think your experience could be a great fit.\n\nWould you be open to a quick conversation?`,
+        subject: `${targetRole} opportunity`,
+        body: `Hi [Name],\n\nWe're hiring a ${targetRole} and your experience caught our eye.\n\nWould you be open to a quick conversation?`,
         personalizationNotes: ['Fallback template'],
         tone: 'casual',
-        variant: 'recruiting',
+        variant: 'outreach',
       },
       personalizedOutreach: [],
-      teamComposition: { departments: [], seniorityBreakdown: '', teamCulture: '' },
       generatedAt: new Date().toISOString(),
     }
   }

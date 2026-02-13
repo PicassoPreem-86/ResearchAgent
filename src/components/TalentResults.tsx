@@ -2,18 +2,14 @@ import { useState, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   ArrowLeft,
-  Building2,
-  Globe,
+  Briefcase,
   UserSearch,
   SlidersHorizontal,
-  TrendingUp,
-  TrendingDown,
-  Minus,
   Sparkles,
-  Users,
   Mail,
+  Building2,
 } from 'lucide-react'
-import type { TalentReport, TalentProfile, TalentInsight } from '@/types/prospect'
+import type { TalentReport, TalentProfile } from '@/types/prospect'
 import { EmailPreview } from './EmailPreview'
 
 interface TalentResultsProps {
@@ -56,55 +52,23 @@ function MatchScoreRing({ score }: { score: number }) {
   )
 }
 
-function InsightCard({ insight }: { insight: TalentInsight }) {
-  const signalConfig = {
-    positive: {
-      icon: TrendingUp,
-      bg: 'bg-emerald-500/10 border-emerald-500/20',
-      iconColor: 'text-emerald-400',
-      label: 'text-emerald-300/70',
-      badge: 'Opportunity',
-    },
-    negative: {
-      icon: TrendingDown,
-      bg: 'bg-red-500/10 border-red-500/20',
-      iconColor: 'text-red-400',
-      label: 'text-red-300/70',
-      badge: 'Challenge',
-    },
-    neutral: {
-      icon: Minus,
-      bg: 'bg-white/[0.04] border-white/[0.06]',
-      iconColor: 'text-white/40',
-      label: 'text-white/40',
-      badge: 'Info',
-    },
+function SourceBadge({ source }: { source?: string }) {
+  if (!source) return null
+  if (source === 'linkedin') {
+    return (
+      <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-300/70 font-medium">
+        LinkedIn
+      </span>
+    )
   }
-  const config = signalConfig[insight.signal]
-  const Icon = config.icon
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      className={`glass p-4 border ${config.bg}`}
-    >
-      <div className="flex items-start gap-3">
-        <div className="p-1.5 rounded-lg bg-white/[0.04] shrink-0">
-          <Icon className={`w-3.5 h-3.5 ${config.iconColor}`} />
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
-            <h4 className="text-xs font-semibold text-white/70">{insight.title}</h4>
-            <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-medium ${config.label} ${config.bg}`}>
-              {config.badge}
-            </span>
-          </div>
-          <p className="text-xs text-white/35 leading-relaxed">{insight.description}</p>
-        </div>
-      </div>
-    </motion.div>
-  )
+  if (source === 'github') {
+    return (
+      <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/[0.04] border border-white/[0.08] text-white/40 font-medium">
+        GitHub
+      </span>
+    )
+  }
+  return null
 }
 
 function ProfileCard({ profile, index }: { profile: TalentProfile; index: number }) {
@@ -116,7 +80,7 @@ function ProfileCard({ profile, index }: { profile: TalentProfile; index: number
       className="glass glass-hover p-5"
     >
       <div className="flex items-start gap-4">
-        {/* Avatar placeholder */}
+        {/* Avatar */}
         <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-cyan-500/15 to-brand-600/10 border border-cyan-500/15 flex items-center justify-center shrink-0">
           <span className="text-sm font-bold text-cyan-300">
             {profile.name
@@ -132,7 +96,8 @@ function ProfileCard({ profile, index }: { profile: TalentProfile; index: number
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-0.5">
             <h3 className="text-sm font-semibold text-white/85">{profile.name}</h3>
-            {profile.linkedinUrl && (
+            <SourceBadge source={profile.source} />
+            {profile.linkedinUrl && !profile.source && (
               <a
                 href={profile.linkedinUrl}
                 target="_blank"
@@ -142,7 +107,7 @@ function ProfileCard({ profile, index }: { profile: TalentProfile; index: number
                 LinkedIn
               </a>
             )}
-            {profile.githubUrl && (
+            {profile.githubUrl && !profile.source && (
               <a
                 href={profile.githubUrl}
                 target="_blank"
@@ -155,6 +120,12 @@ function ProfileCard({ profile, index }: { profile: TalentProfile; index: number
           </div>
           <div className="flex items-center gap-2 mb-2">
             <span className="text-xs text-white/40">{profile.role}</span>
+            {profile.currentCompany && (
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/[0.04] border border-white/[0.06] text-white/30 font-medium flex items-center gap-1">
+                <Building2 className="w-2.5 h-2.5" />
+                {profile.currentCompany}
+              </span>
+            )}
             <span className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-500/10 border border-cyan-500/15 text-cyan-300/60 font-medium">
               {profile.department}
             </span>
@@ -177,7 +148,7 @@ function ProfileCard({ profile, index }: { profile: TalentProfile; index: number
           {/* Match reasons */}
           {profile.matchReasons.length > 0 && (
             <div className="mb-3">
-              <span className="text-[9px] text-white/20 uppercase tracking-wider font-semibold">Match reasons</span>
+              <span className="text-[9px] text-white/20 uppercase tracking-wider font-semibold">Why they fit</span>
               <div className="flex flex-wrap gap-1 mt-1">
                 {profile.matchReasons.map((reason, i) => (
                   <span
@@ -191,12 +162,12 @@ function ProfileCard({ profile, index }: { profile: TalentProfile; index: number
             </div>
           )}
 
-          {/* Recruiting angle */}
-          {profile.recruitingAngle && (
+          {/* Fit summary */}
+          {profile.fitSummary && (
             <div className="flex items-start gap-1.5 pt-2 border-t border-white/[0.04]">
               <Sparkles className="w-3 h-3 text-amber-400/50 mt-0.5 shrink-0" />
               <p className="text-[11px] text-amber-200/40 leading-relaxed italic">
-                {profile.recruitingAngle}
+                {profile.fitSummary}
               </p>
             </div>
           )}
@@ -218,10 +189,13 @@ export function TalentResults({ report, onReset }: TalentResultsProps) {
       .sort((a, b) => b.matchScore - a.matchScore)
   }, [report.profiles, minScore])
 
-  const hasInsights = report.talentInsights && report.talentInsights.length > 0
   const hasProfiles = report.profiles && report.profiles.length > 0
-  const hasTeamComp = report.teamComposition && (report.teamComposition.departments.length > 0 || report.teamComposition.teamCulture)
   const hasPersonalOutreach = report.personalizedOutreach && report.personalizedOutreach.length > 0
+
+  // Build search summary chips
+  const searchChips: string[] = [report.search.role]
+  if (report.search.seniority) searchChips.push(report.search.seniority)
+  if (report.search.location) searchChips.push(report.search.location)
 
   return (
     <motion.div
@@ -241,14 +215,14 @@ export function TalentResults({ report, onReset }: TalentResultsProps) {
           className="flex items-center gap-2 text-sm text-white/30 hover:text-white/60 transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
-          Search another
+          New search
         </button>
         <div className="text-xs text-white/20 font-mono">
           {new Date(report.generatedAt).toLocaleString()}
         </div>
       </motion.div>
 
-      {/* Company header */}
+      {/* Search summary header */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -260,98 +234,32 @@ export function TalentResults({ report, onReset }: TalentResultsProps) {
             <UserSearch className="w-6 h-6 text-cyan-400" />
           </div>
           <div className="flex-1 min-w-0">
-            <h2 className="text-lg font-bold text-white/90 mb-1">Talent Report</h2>
-            <div className="flex items-center gap-3 text-sm text-white/40">
-              <span className="flex items-center gap-1.5">
-                <Building2 className="w-3.5 h-3.5" />
-                {report.company.name}
-              </span>
-              <span className="flex items-center gap-1.5">
-                <Globe className="w-3.5 h-3.5" />
-                {report.company.domain}
-              </span>
+            <h2 className="text-lg font-bold text-white/90 mb-2">Candidate Search Results</h2>
+            <div className="flex flex-wrap items-center gap-2">
+              {searchChips.map((chip) => (
+                <span
+                  key={chip}
+                  className="text-xs px-2.5 py-1 rounded-lg bg-cyan-500/10 border border-cyan-500/20 text-cyan-300 font-medium"
+                >
+                  {chip}
+                </span>
+              ))}
+              {report.search.skills.map((skill) => (
+                <span
+                  key={skill}
+                  className="text-xs px-2.5 py-1 rounded-lg bg-white/[0.04] border border-white/[0.06] text-white/40 font-medium"
+                >
+                  {skill}
+                </span>
+              ))}
             </div>
           </div>
-          <div className="flex items-center gap-3">
-            <div className="text-right">
-              <div className="text-sm font-bold text-cyan-300">{report.profiles.length}</div>
-              <div className="text-[10px] text-white/25">profiles</div>
-            </div>
-            <div className="px-3 py-1.5 rounded-lg bg-cyan-500/10 border border-cyan-500/20">
-              <span className="text-xs font-semibold text-cyan-300">{report.targetRole}</span>
-            </div>
+          <div className="text-right">
+            <div className="text-sm font-bold text-cyan-300">{report.profiles.length}</div>
+            <div className="text-[10px] text-white/25">candidates</div>
           </div>
         </div>
       </motion.div>
-
-      {/* Talent Insights */}
-      {hasInsights && (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.05 }}
-          className="mb-8"
-        >
-          <div className="flex items-center gap-2.5 mb-4">
-            <div className="p-2 rounded-lg bg-white/[0.04] border border-white/[0.06]">
-              <TrendingUp className="w-4 h-4 text-emerald-400" />
-            </div>
-            <h3 className="text-base font-semibold text-white/80">Talent Insights</h3>
-            <span className="text-[10px] text-white/20 ml-auto">{report.talentInsights.length} signals</span>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {report.talentInsights.map((insight, i) => (
-              <InsightCard key={i} insight={insight} />
-            ))}
-          </div>
-        </motion.div>
-      )}
-
-      {/* Team Composition */}
-      {hasTeamComp && (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.07 }}
-          className="mb-8"
-        >
-          <div className="flex items-center gap-2.5 mb-4">
-            <div className="p-2 rounded-lg bg-white/[0.04] border border-white/[0.06]">
-              <Users className="w-4 h-4 text-brand-400" />
-            </div>
-            <h3 className="text-base font-semibold text-white/80">Team Composition</h3>
-          </div>
-          <div className="glass p-6">
-            {report.teamComposition.departments.length > 0 && (
-              <div className="mb-5">
-                <div className="text-[10px] text-white/25 uppercase tracking-wider font-semibold mb-3">Department Breakdown</div>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                  {report.teamComposition.departments.map((dept, i) => (
-                    <div key={i} className="flex items-center gap-2 p-2.5 rounded-lg bg-white/[0.02] border border-white/[0.04]">
-                      <div className="w-7 h-7 rounded-lg bg-cyan-500/10 border border-cyan-500/15 flex items-center justify-center shrink-0">
-                        <span className="text-[10px] font-bold text-cyan-300">{dept.count}</span>
-                      </div>
-                      <span className="text-xs text-white/50 font-medium">{dept.name}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            {report.teamComposition.seniorityBreakdown && (
-              <div className="mb-4">
-                <div className="text-[10px] text-white/25 uppercase tracking-wider font-semibold mb-2">Seniority</div>
-                <p className="text-xs text-white/40 leading-relaxed">{report.teamComposition.seniorityBreakdown}</p>
-              </div>
-            )}
-            {report.teamComposition.teamCulture && (
-              <div>
-                <div className="text-[10px] text-white/25 uppercase tracking-wider font-semibold mb-2">Culture Signals</div>
-                <p className="text-xs text-white/40 leading-relaxed">{report.teamComposition.teamCulture}</p>
-              </div>
-            )}
-          </div>
-        </motion.div>
-      )}
 
       {/* Profiles section */}
       {hasProfiles && (
@@ -364,9 +272,9 @@ export function TalentResults({ report, onReset }: TalentResultsProps) {
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2.5">
               <div className="p-2 rounded-lg bg-white/[0.04] border border-white/[0.06]">
-                <UserSearch className="w-4 h-4 text-cyan-400" />
+                <Briefcase className="w-4 h-4 text-cyan-400" />
               </div>
-              <h3 className="text-base font-semibold text-white/80">Team Members</h3>
+              <h3 className="text-base font-semibold text-white/80">Candidates</h3>
             </div>
 
             {/* Min score filter */}
@@ -387,7 +295,7 @@ export function TalentResults({ report, onReset }: TalentResultsProps) {
           </div>
 
           <div className="text-xs text-white/20 mb-3">
-            Showing {filteredProfiles.length} of {report.profiles.length} profiles
+            Showing {filteredProfiles.length} of {report.profiles.length} candidates
           </div>
 
           <div className="space-y-3">
@@ -404,14 +312,14 @@ export function TalentResults({ report, onReset }: TalentResultsProps) {
                 <UserSearch className="w-6 h-6 text-white/20" />
               </div>
               <p className="text-sm text-white/30">
-                No profiles match the current filter. Try lowering the minimum score.
+                No candidates match the current filter. Try lowering the minimum score.
               </p>
             </motion.div>
           )}
         </motion.div>
       )}
 
-      {/* No profiles found at all */}
+      {/* No candidates found */}
       {!hasProfiles && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -422,9 +330,9 @@ export function TalentResults({ report, onReset }: TalentResultsProps) {
           <div className="inline-flex p-4 rounded-2xl bg-white/[0.04] border border-white/[0.06] mb-4">
             <UserSearch className="w-8 h-8 text-white/20" />
           </div>
-          <h3 className="text-lg font-semibold text-white/60 mb-2">No profiles found</h3>
+          <h3 className="text-lg font-semibold text-white/60 mb-2">No candidates found</h3>
           <p className="text-sm text-white/30 max-w-sm mx-auto">
-            We couldn't find team members on this company's public pages. Try a company with a public team or about page.
+            We couldn't find matching profiles. Try broadening your search with different skills or a less specific role title.
           </p>
         </motion.div>
       )}
@@ -443,7 +351,7 @@ export function TalentResults({ report, onReset }: TalentResultsProps) {
             </div>
             <div>
               <h3 className="text-base font-semibold text-white/80">Personalized Outreach</h3>
-              <p className="text-xs text-white/30">Individual emails for top matches</p>
+              <p className="text-xs text-white/30">Individual emails for top candidates</p>
             </div>
           </div>
           <div className="space-y-4">
@@ -457,14 +365,14 @@ export function TalentResults({ report, onReset }: TalentResultsProps) {
                   </div>
                   <span className="text-sm font-semibold text-white/70">For {po.name}</span>
                 </div>
-                <EmailPreview email={po.email} recipientDomain={report.company.domain} />
+                <EmailPreview email={po.email} />
               </div>
             ))}
           </div>
         </motion.div>
       )}
 
-      {/* Recruiting Email */}
+      {/* Outreach Template */}
       {report.recruitingEmail && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -477,14 +385,11 @@ export function TalentResults({ report, onReset }: TalentResultsProps) {
               <Sparkles className="w-4 h-4 text-cyan-400" />
             </div>
             <div>
-              <h3 className="text-base font-semibold text-white/80">Recruiting Outreach</h3>
-              <p className="text-xs text-white/30">AI-crafted based on company research</p>
+              <h3 className="text-base font-semibold text-white/80">Outreach Template</h3>
+              <p className="text-xs text-white/30">AI-crafted for this role</p>
             </div>
           </div>
-          <EmailPreview
-            email={report.recruitingEmail}
-            recipientDomain={report.company.domain}
-          />
+          <EmailPreview email={report.recruitingEmail} />
         </motion.div>
       )}
     </motion.div>
