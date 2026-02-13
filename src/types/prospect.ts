@@ -130,12 +130,48 @@ export interface ProspectReport {
   researchedAt: string
 }
 
+export interface GeoTarget {
+  regions: string[]
+  countries: string[]
+  metros: string[]
+}
+
+export const EMPTY_GEO_TARGET: GeoTarget = { regions: [], countries: [], metros: [] }
+
+export function hasGeoSelections(geo: GeoTarget): boolean {
+  return geo.regions.length > 0 || geo.countries.length > 0 || geo.metros.length > 0
+}
+
+export function geoTargetToQueryString(geo: GeoTarget): string {
+  const terms = [...geo.metros, ...geo.countries, ...geo.regions]
+  if (terms.length === 0) return ''
+  if (terms.length === 1) return `"${terms[0]}"`
+  return terms.map((t) => `"${t}"`).join(' OR ')
+}
+
+export function geoTargetToLabel(geo: GeoTarget): string {
+  const terms = [...geo.metros, ...geo.countries, ...geo.regions]
+  return terms.join(', ')
+}
+
+export function migrateGeography(geography: string | GeoTarget | undefined): GeoTarget {
+  if (!geography) return { ...EMPTY_GEO_TARGET }
+  if (typeof geography === 'object' && 'regions' in geography) {
+    return {
+      regions: geography.regions || [],
+      countries: geography.countries || [],
+      metros: geography.metros || [],
+    }
+  }
+  return { ...EMPTY_GEO_TARGET }
+}
+
 export interface ICP {
   industries: string[]
   sizeRange: string
   techStack: string[]
   keywords: string[]
-  geography: string
+  geography: GeoTarget
   fundingStage: string
 }
 
@@ -178,12 +214,12 @@ export interface TalentProfile {
 export interface TalentSearch {
   targetRole: string
   targetSkills: string[]
-  location?: string
+  location?: GeoTarget
   seniority?: string
 }
 
 export interface TalentReport {
-  search: { role: string; skills: string[]; location?: string; seniority?: string }
+  search: { role: string; skills: string[]; location?: GeoTarget; seniority?: string }
   targetRole: string
   profiles: TalentProfile[]
   recruitingEmail: OutreachEmail

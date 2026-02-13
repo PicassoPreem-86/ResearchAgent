@@ -195,7 +195,10 @@ export function TalentResults({ report, onReset }: TalentResultsProps) {
   // Build search summary chips
   const searchChips: string[] = [report.search.role]
   if (report.search.seniority) searchChips.push(report.search.seniority)
-  if (report.search.location) searchChips.push(report.search.location)
+  if (report.search.location) {
+    const locParts = [...(report.search.location.metros || []), ...(report.search.location.countries || []), ...(report.search.location.regions || [])]
+    if (locParts.length > 0) searchChips.push(locParts.join(', '))
+  }
 
   return (
     <motion.div

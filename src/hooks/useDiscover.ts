@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef } from 'react'
-import type { ICP, DiscoverResults, ResearchStage } from '@/types/prospect'
+import type { ICP, DiscoverResults, ResearchStage, GeoTarget } from '@/types/prospect'
 
 interface DiscoverProgress {
   stage: ResearchStage
@@ -12,7 +12,7 @@ interface UseDiscoverReturn {
   results: DiscoverResults | null
   error: string | null
   isSearching: boolean
-  discoverLookalike: (domain: string) => void
+  discoverLookalike: (domain: string, geography?: GeoTarget) => void
   discoverByICP: (icp: ICP) => void
   saveICP: (icp: ICP) => Promise<void>
   loadICP: () => Promise<ICP | null>
@@ -132,9 +132,9 @@ export function useDiscover(): UseDiscoverReturn {
   }, [])
 
   const discoverLookalike = useCallback(
-    (domain: string) => {
+    (domain: string, geography?: GeoTarget) => {
       const cleaned = domain.replace(/^https?:\/\//, '').replace(/\/.*$/, '')
-      streamRequest('/api/discover/lookalike/stream', { domain: cleaned })
+      streamRequest('/api/discover/lookalike/stream', { domain: cleaned, geography })
     },
     [streamRequest],
   )

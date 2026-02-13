@@ -13,7 +13,8 @@ import { generatePdf, generateComparisonPdf } from './pdf.js'
 import { discoverByICP, discoverLookalike, discoverByKeywords } from './discover.js'
 import { saveICP, loadICP } from './icp.js'
 import { searchTalent } from './talent.js'
-import type { ResearchProgress, EmailTone, SellerContext, ReportTemplate, ProspectReport, ComparisonReport, ICP, DiscoverResults, TalentReport } from '../types/prospect.js'
+import type { ResearchProgress, EmailTone, SellerContext, ReportTemplate, ProspectReport, ComparisonReport, ICP, DiscoverResults, TalentReport, GeoTarget } from '../types/prospect.js'
+import { migrateGeography } from '../types/prospect.js'
 
 const app = new Hono()
 
@@ -390,7 +391,7 @@ app.post('/api/icp', async (c) => {
       sizeRange: icp.sizeRange || '',
       techStack: icp.techStack || [],
       keywords: icp.keywords || [],
-      geography: icp.geography || '',
+      geography: migrateGeography(icp.geography),
       fundingStage: icp.fundingStage || '',
     })
     return c.json({ success: true })
@@ -471,13 +472,13 @@ app.post('/api/discover/icp/stream', async (c) => {
 
 app.post('/api/discover/lookalike', async (c) => {
   try {
-    const body = await c.req.json<{ domain: string }>()
+    const body = await c.req.json<{ domain: string; geography?: GeoTarget }>()
     if (!body.domain) {
       return c.json({ error: 'domain is required' }, 400)
     }
 
     const domain = body.domain.replace(/^https?:\/\//, '').replace(/\/.*$/, '')
-    const companies = await discoverLookalike(domain)
+    const companies = await discoverLookalike(domain, undefined, body.geography)
 
     const result: DiscoverResults = {
       query: `Similar to ${domain}`,
@@ -495,7 +496,7 @@ app.post('/api/discover/lookalike', async (c) => {
 
 app.post('/api/discover/lookalike/stream', async (c) => {
   try {
-    const body = await c.req.json<{ domain: string }>()
+    const body = await c.req.json<{ domain: string; geography?: GeoTarget }>()
     if (!body.domain) {
       return c.json({ error: 'domain is required' }, 400)
     }
@@ -515,7 +516,7 @@ app.post('/api/discover/lookalike/stream', async (c) => {
             data: JSON.stringify({ stage: 'analyzing', message: msg, progress }),
             event: 'progress',
           })
-        })
+        }, body.geography)
 
         await stream.writeSSE({
           data: JSON.stringify({
@@ -571,7 +572,7 @@ app.post('/api/discover/search', async (c) => {
 
 app.post('/api/talent/search', async (c) => {
   try {
-    const body = await c.req.json<{ targetRole: string; targetSkills: string[]; location?: string; seniority?: string }>()
+    const body = await c.req.json<{ targetRole: string; targetSkills: string[]; location?: GeoTarget; seniority?: string }>()
     if (!body.targetRole) {
       return c.json({ error: 'targetRole is required' }, 400)
     }
@@ -592,7 +593,7 @@ app.post('/api/talent/search', async (c) => {
 
 app.post('/api/talent/search/stream', async (c) => {
   try {
-    const body = await c.req.json<{ targetRole: string; targetSkills: string[]; location?: string; seniority?: string }>()
+    const body = await c.req.json<{ targetRole: string; targetSkills: string[]; location?: GeoTarget; seniority?: string }>()
     if (!body.targetRole) {
       return c.json({ error: 'targetRole is required' }, 400)
     }

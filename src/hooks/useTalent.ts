@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef } from 'react'
-import type { TalentReport, ResearchStage } from '@/types/prospect'
+import type { TalentReport, ResearchStage, GeoTarget } from '@/types/prospect'
 
 interface TalentProgress {
   stage: ResearchStage
@@ -12,7 +12,7 @@ interface UseTalentReturn {
   talentReport: TalentReport | null
   error: string | null
   isSearching: boolean
-  searchTalent: (targetRole: string, targetSkills: string[], location?: string, seniority?: string) => void
+  searchTalent: (targetRole: string, targetSkills: string[], location?: GeoTarget, seniority?: string) => void
   reset: () => void
 }
 
@@ -40,7 +40,7 @@ export function useTalent(): UseTalentReturn {
     setError(null)
   }, [])
 
-  const searchTalent = useCallback((targetRole: string, targetSkills: string[], location?: string, seniority?: string) => {
+  const searchTalent = useCallback((targetRole: string, targetSkills: string[], location?: GeoTarget, seniority?: string) => {
     setError(null)
     setTalentReport(null)
     setProgress({ stage: 'scraping', message: 'Starting candidate search...', progress: 5 })

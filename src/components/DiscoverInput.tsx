@@ -1,7 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Search, Globe, ArrowRight, Crosshair, Users, X, Save, Loader2 } from 'lucide-react'
+import { Search, Globe, ArrowRight, Crosshair, Users, X, Save, Loader2, MapPin, ChevronDown } from 'lucide-react'
+import { GeoPicker } from '@/components/GeoPicker'
 import type { ICP } from '@/types/prospect'
+import type { GeoTarget } from '@/types/prospect'
+import { EMPTY_GEO_TARGET, hasGeoSelections, migrateGeography } from '@/types/prospect'
 
 const EXAMPLE_DOMAINS = [
   'stripe.com',
@@ -33,7 +36,7 @@ const FUNDING_OPTIONS = [
 type DiscoverMode = 'lookalike' | 'icp'
 
 interface DiscoverInputProps {
-  onSearchLookalike: (domain: string) => void
+  onSearchLookalike: (domain: string, geography?: GeoTarget) => void
   onSearchICP: (icp: ICP) => void
   onSaveICP: (icp: ICP) => Promise<void>
   loadICP: () => Promise<ICP | null>
@@ -114,8 +117,10 @@ export function DiscoverInput({ onSearchLookalike, onSearchICP, onSaveICP, loadI
   const [sizeRange, setSizeRange] = useState('')
   const [techStack, setTechStack] = useState<string[]>([])
   const [keywords, setKeywords] = useState<string[]>([])
-  const [geography, setGeography] = useState('')
+  const [geography, setGeography] = useState<GeoTarget>({ ...EMPTY_GEO_TARGET })
   const [fundingStage, setFundingStage] = useState('')
+  const [lookalikeGeo, setLookalikeGeo] = useState<GeoTarget>({ ...EMPTY_GEO_TARGET })
+  const [showLookalikeGeo, setShowLookalikeGeo] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [icpLoaded, setIcpLoaded] = useState(false)
 
@@ -134,7 +139,7 @@ export function DiscoverInput({ onSearchLookalike, onSearchICP, onSaveICP, loadI
       setSizeRange(saved.sizeRange || '')
       setTechStack(saved.techStack || [])
       setKeywords(saved.keywords || [])
-      setGeography(saved.geography || '')
+      setGeography(migrateGeography(saved.geography))
       setFundingStage(saved.fundingStage || '')
     }
     setIcpLoaded(true)
@@ -162,7 +167,7 @@ export function DiscoverInput({ onSearchLookalike, onSearchICP, onSaveICP, loadI
     if (isLoading) return
     if (mode === 'lookalike') {
       if (!domain.trim()) return
-      onSearchLookalike(domain.trim())
+      onSearchLookalike(domain.trim(), hasGeoSelections(lookalikeGeo) ? lookalikeGeo : undefined)
     } else {
       if (!icpValid) return
       onSearchICP(buildICP())
@@ -276,7 +281,32 @@ export function DiscoverInput({ onSearchLookalike, onSearchICP, onSaveICP, loadI
                   </div>
                 </div>
               </div>
-              <p className="text-center text-xs text-white/20 mt-3">
+              {/* Optional geographic filter */}
+              <div className="mt-3">
+                <button
+                  type="button"
+                  onClick={() => setShowLookalikeGeo(!showLookalikeGeo)}
+                  className="flex items-center gap-1.5 mx-auto text-xs text-white/25 hover:text-white/40 transition-colors"
+                >
+                  <MapPin className="w-3 h-3" />
+                  <span>{showLookalikeGeo ? 'Hide' : 'Filter by'} region</span>
+                  <ChevronDown className={`w-3 h-3 transition-transform duration-200 ${showLookalikeGeo ? 'rotate-180' : ''}`} />
+                </button>
+                <AnimatePresence>
+                  {showLookalikeGeo && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="overflow-hidden mt-2 max-w-md mx-auto"
+                    >
+                      <GeoPicker value={lookalikeGeo} onChange={setLookalikeGeo} disabled={isLoading} />
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+              <p className="text-center text-xs text-white/20 mt-2">
                 Enter a company you love selling to and we'll find similar ones
               </p>
             </motion.div>
@@ -368,15 +398,7 @@ export function DiscoverInput({ onSearchLookalike, onSearchICP, onSaveICP, loadI
                   <label className="text-[10px] text-white/25 uppercase tracking-wider font-semibold mb-1.5 block">
                     Geography
                   </label>
-                  <div className="glass p-3">
-                    <input
-                      type="text"
-                      value={geography}
-                      onChange={(e) => setGeography(e.target.value)}
-                      placeholder="US, Europe, Global..."
-                      className="bg-transparent text-sm text-white placeholder:text-white/20 outline-none w-full"
-                    />
-                  </div>
+                  <GeoPicker value={geography} onChange={setGeography} />
                 </div>
               </div>
 

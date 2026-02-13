@@ -1,6 +1,9 @@
 import { useState, useRef } from 'react'
 import { motion } from 'framer-motion'
-import { UserSearch, Briefcase, ArrowRight, X, MapPin, ChevronDown } from 'lucide-react'
+import { UserSearch, Briefcase, ArrowRight, X, ChevronDown } from 'lucide-react'
+import { GeoPicker } from '@/components/GeoPicker'
+import type { GeoTarget } from '@/types/prospect'
+import { EMPTY_GEO_TARGET, hasGeoSelections } from '@/types/prospect'
 
 const SENIORITY_OPTIONS = [
   { value: 'any', label: 'Any Level' },
@@ -12,7 +15,7 @@ const SENIORITY_OPTIONS = [
 ]
 
 interface TalentInputProps {
-  onSearch: (targetRole: string, targetSkills: string[], location?: string, seniority?: string) => void
+  onSearch: (targetRole: string, targetSkills: string[], location?: GeoTarget, seniority?: string) => void
   isLoading: boolean
 }
 
@@ -84,7 +87,7 @@ function SkillTagInput({
 export function TalentInput({ onSearch, isLoading }: TalentInputProps) {
   const [targetRole, setTargetRole] = useState('')
   const [targetSkills, setTargetSkills] = useState<string[]>([])
-  const [location, setLocation] = useState('')
+  const [location, setLocation] = useState<GeoTarget>({ ...EMPTY_GEO_TARGET })
   const [seniority, setSeniority] = useState('any')
 
   const isValid = targetRole.trim().length > 0
@@ -95,7 +98,7 @@ export function TalentInput({ onSearch, isLoading }: TalentInputProps) {
     onSearch(
       targetRole.trim(),
       targetSkills,
-      location.trim() || undefined,
+      hasGeoSelections(location) ? location : undefined,
       seniority !== 'any' ? seniority : undefined
     )
   }
@@ -165,43 +168,33 @@ export function TalentInput({ onSearch, isLoading }: TalentInputProps) {
           />
         </div>
 
-        {/* Location and seniority row */}
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="text-[10px] text-white/25 uppercase tracking-wider font-semibold mb-1.5 block">
-              Location <span className="text-white/15">(optional)</span>
-            </label>
-            <div className="glass p-3 flex items-center gap-2.5">
-              <MapPin className="w-4 h-4 text-white/20 shrink-0" />
-              <input
-                type="text"
-                value={location}
-                onChange={(e) => setLocation(e.target.value)}
-                placeholder="San Francisco, Remote..."
-                className="bg-transparent text-sm text-white placeholder:text-white/20 outline-none flex-1"
-                disabled={isLoading}
-              />
-            </div>
-          </div>
-          <div>
-            <label className="text-[10px] text-white/25 uppercase tracking-wider font-semibold mb-1.5 block">
-              Seniority <span className="text-white/15">(optional)</span>
-            </label>
-            <div className="glass p-3 flex items-center gap-2.5 relative">
-              <ChevronDown className="w-4 h-4 text-white/20 shrink-0" />
-              <select
-                value={seniority}
-                onChange={(e) => setSeniority(e.target.value)}
-                disabled={isLoading}
-                className="bg-transparent text-sm text-white outline-none flex-1 appearance-none cursor-pointer [&>option]:bg-zinc-900 [&>option]:text-white"
-              >
-                {SENIORITY_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-            </div>
+        {/* Location */}
+        <div>
+          <label className="text-[10px] text-white/25 uppercase tracking-wider font-semibold mb-1.5 block">
+            Location <span className="text-white/15">(optional)</span>
+          </label>
+          <GeoPicker value={location} onChange={setLocation} disabled={isLoading} accent="cyan" />
+        </div>
+
+        {/* Seniority */}
+        <div>
+          <label className="text-[10px] text-white/25 uppercase tracking-wider font-semibold mb-1.5 block">
+            Seniority <span className="text-white/15">(optional)</span>
+          </label>
+          <div className="glass p-3 flex items-center gap-2.5 relative max-w-xs">
+            <ChevronDown className="w-4 h-4 text-white/20 shrink-0" />
+            <select
+              value={seniority}
+              onChange={(e) => setSeniority(e.target.value)}
+              disabled={isLoading}
+              className="bg-transparent text-sm text-white outline-none flex-1 appearance-none cursor-pointer [&>option]:bg-zinc-900 [&>option]:text-white"
+            >
+              {SENIORITY_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
 

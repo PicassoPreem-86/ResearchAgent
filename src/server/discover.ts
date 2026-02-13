@@ -1,7 +1,8 @@
 import * as cheerio from 'cheerio'
 import OpenAI from 'openai'
 import { scrapeCompany } from './scraper.js'
-import type { ICP, DiscoveredCompany } from '../types/prospect.js'
+import type { ICP, DiscoveredCompany, GeoTarget } from '../types/prospect.js'
+import { geoTargetToQueryString, geoTargetToLabel, hasGeoSelections } from '../types/prospect.js'
 import { extractStructuredData } from './scraper.js'
 
 const client = new OpenAI()
@@ -450,7 +451,8 @@ export async function discoverByICP(
   const industryPart = icp.industries.length > 0 ? icp.industries.join(' OR ') : ''
   const keywordPart = icp.keywords.length > 0 ? icp.keywords.join(' ') : ''
   const techPart = icp.techStack.length > 0 ? icp.techStack.slice(0, 2).join(' ') : ''
-  const geoPart = icp.geography || ''
+  const geo = icp.geography
+  const geoPart = geo && hasGeoSelections(geo) ? geoTargetToQueryString(geo) : ''
   const sizePart = icp.sizeRange ? `${icp.sizeRange} employees` : ''
   const fundingPart = icp.fundingStage || ''
 
@@ -513,7 +515,7 @@ export async function discoverByICP(
     icp.sizeRange ? `Company size: ${icp.sizeRange}` : '',
     icp.techStack.length > 0 ? `Tech stack: ${icp.techStack.join(', ')}` : '',
     icp.keywords.length > 0 ? `Keywords: ${icp.keywords.join(', ')}` : '',
-    icp.geography ? `Geography: ${icp.geography}` : '',
+    geo && hasGeoSelections(geo) ? `Geography: ${geoTargetToLabel(geo)}` : '',
     icp.fundingStage ? `Funding stage: ${icp.fundingStage}` : '',
   ]
     .filter(Boolean)
@@ -536,7 +538,8 @@ export async function discoverByICP(
 
 export async function discoverLookalike(
   referenceDomain: string,
-  onProgress?: (message: string) => Promise<void> | void
+  onProgress?: (message: string) => Promise<void> | void,
+  geography?: GeoTarget
 ): Promise<DiscoveredCompany[]> {
   await onProgress?.('Researching reference company...')
 
@@ -593,12 +596,13 @@ Respond with JSON:
   await onProgress?.('Searching for similar companies...')
 
   // Build search queries
+  const geoSuffix = geography && hasGeoSelections(geography) ? ` ${geoTargetToQueryString(geography)}` : ''
   const queries = [
-    `companies similar to ${companyName}`,
-    `${attributes.industry} ${attributes.businessModel} companies`,
-    `competitors of ${companyName}`,
-    `${attributes.industry} ${attributes.targetMarket} startups`,
-    `alternatives to ${companyName}`,
+    `companies similar to ${companyName}${geoSuffix}`,
+    `${attributes.industry} ${attributes.businessModel} companies${geoSuffix}`,
+    `competitors of ${companyName}${geoSuffix}`,
+    `${attributes.industry} ${attributes.targetMarket} startups${geoSuffix}`,
+    `alternatives to ${companyName}${geoSuffix}`,
   ]
 
   const allRaw: { domain: string; name: string; snippet: string; source: string }[] = []
@@ -636,7 +640,8 @@ Respond with JSON:
   await onProgress?.(`Found ${deduped.length} candidates, scoring similarity...`)
 
   // Build reference description for similarity scoring
-  const referenceDescription = `${companyName} (${referenceDomain}): ${attributes.description}. Industry: ${attributes.industry}. Business model: ${attributes.businessModel}. Target market: ${attributes.targetMarket}. Tech focus: ${attributes.techFocus}.`
+  const geoContext = geography && hasGeoSelections(geography) ? ` Target geography: ${geoTargetToLabel(geography)}.` : ''
+  const referenceDescription = `${companyName} (${referenceDomain}): ${attributes.description}. Industry: ${attributes.industry}. Business model: ${attributes.businessModel}. Target market: ${attributes.targetMarket}. Tech focus: ${attributes.techFocus}.${geoContext}`
 
   // Score in batches of 20
   const scored: DiscoveredCompany[] = []
@@ -679,7 +684,7 @@ export async function discoverByKeywords(
     if (filters.industries?.length) parts.push(`Industries: ${filters.industries.join(', ')}`)
     if (filters.sizeRange) parts.push(`Size: ${filters.sizeRange}`)
     if (filters.techStack?.length) parts.push(`Tech: ${filters.techStack.join(', ')}`)
-    if (filters.geography) parts.push(`Geography: ${filters.geography}`)
+    if (filters.geography && hasGeoSelections(filters.geography)) parts.push(`Geography: ${geoTargetToLabel(filters.geography)}`)
     if (filters.fundingStage) parts.push(`Funding: ${filters.fundingStage}`)
   }
 

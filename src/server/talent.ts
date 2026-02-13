@@ -1,6 +1,7 @@
 import OpenAI from 'openai'
 import { searchGoogle } from './discover.js'
-import type { TalentProfile, TalentReport, OutreachEmail } from '../types/prospect.js'
+import type { TalentProfile, TalentReport, OutreachEmail, GeoTarget } from '../types/prospect.js'
+import { geoTargetToLabel, hasGeoSelections } from '../types/prospect.js'
 
 const client = new OpenAI()
 
@@ -13,19 +14,34 @@ function isEngineeringRole(role: string): boolean {
 async function searchLinkedIn(
   role: string,
   skills: string[],
-  location?: string,
+  location?: GeoTarget,
   seniority?: string
 ): Promise<{ name: string; title: string; snippet: string; url: string }[]> {
   const queries: string[] = []
 
   const skillsPart = skills.length > 0 ? skills.slice(0, 3).join(' ') : ''
-  const locationPart = location || ''
   const seniorityPart = seniority && seniority !== 'any' ? seniority : ''
 
-  queries.push(`site:linkedin.com/in ${seniorityPart} "${role}" ${skillsPart} ${locationPart}`.trim())
+  // Build location terms — generate per-location queries for better results
+  const locationTerms: string[] = []
+  if (location && hasGeoSelections(location)) {
+    locationTerms.push(...location.metros, ...location.countries, ...location.regions)
+  }
 
-  if (skills.length > 0) {
-    queries.push(`site:linkedin.com/in "${role}" ${skills.slice(0, 2).join(' OR ')} ${locationPart}`.trim())
+  if (locationTerms.length === 0) {
+    // No location filter — single query
+    queries.push(`site:linkedin.com/in ${seniorityPart} "${role}" ${skillsPart}`.trim())
+    if (skills.length > 0) {
+      queries.push(`site:linkedin.com/in "${role}" ${skills.slice(0, 2).join(' OR ')}`.trim())
+    }
+  } else {
+    // Generate per-location queries (cap at 4 locations to avoid too many queries)
+    for (const loc of locationTerms.slice(0, 4)) {
+      queries.push(`site:linkedin.com/in ${seniorityPart} "${role}" ${skillsPart} "${loc}"`.trim())
+    }
+    if (skills.length > 0 && locationTerms.length > 0) {
+      queries.push(`site:linkedin.com/in "${role}" ${skills.slice(0, 2).join(' OR ')} "${locationTerms[0]}"`.trim())
+    }
   }
 
   const results: { name: string; title: string; snippet: string; url: string }[] = []
@@ -85,7 +101,7 @@ async function searchGitHub(
 export async function searchTalent(
   targetRole: string,
   targetSkills: string[],
-  location?: string,
+  location?: GeoTarget,
   seniority?: string,
   onProgress?: (message: string) => Promise<void> | void
 ): Promise<TalentReport> {
@@ -144,7 +160,7 @@ export async function searchTalent(
 
 TARGET ROLE: ${targetRole}
 REQUIRED SKILLS: ${targetSkills.join(', ') || 'Not specified — infer from role title'}
-${location ? `PREFERRED LOCATION: ${location}` : ''}
+${location && hasGeoSelections(location) ? `PREFERRED LOCATION: ${geoTargetToLabel(location)}` : ''}
 ${seniority && seniority !== 'any' ? `SENIORITY LEVEL: ${seniority}` : ''}
 
 CANDIDATE PROFILES FOUND:
