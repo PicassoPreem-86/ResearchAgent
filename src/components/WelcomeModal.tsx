@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Search, BarChart3, AlertTriangle, Mail, Users, Sparkles } from 'lucide-react'
+import { X, Search, Swords, Crosshair, UserSearch, Layers, Sparkles, ArrowRight } from 'lucide-react'
 import { useOnboarding } from '@/hooks/useOnboarding'
 
 interface WelcomeModalProps {
@@ -7,12 +7,42 @@ interface WelcomeModalProps {
   onTryExample: () => void
 }
 
-const REPORT_SECTIONS = [
-  { icon: Search, label: 'Company Intel', color: 'text-brand-400' },
-  { icon: BarChart3, label: 'SWOT Analysis', color: 'text-cyan-400' },
-  { icon: AlertTriangle, label: 'Pain Points', color: 'text-amber-400' },
-  { icon: Users, label: 'Key People', color: 'text-emerald-400' },
-  { icon: Mail, label: 'Outreach Emails', color: 'text-brand-400' },
+const FEATURES = [
+  {
+    icon: Search,
+    label: 'Research',
+    description: 'Deep-dive any company — SWOT, pain points, financials, key people, and outreach emails',
+    color: 'text-brand-400',
+    bg: 'bg-brand-500/10 border-brand-500/20',
+  },
+  {
+    icon: Swords,
+    label: 'Compare',
+    description: 'Side-by-side analysis of 2-5 companies across every dimension',
+    color: 'text-blue-400',
+    bg: 'bg-blue-500/10 border-blue-500/20',
+  },
+  {
+    icon: Crosshair,
+    label: 'Discover',
+    description: 'Find lookalike companies or match against your ideal customer profile',
+    color: 'text-cyan-400',
+    bg: 'bg-cyan-500/10 border-cyan-500/20',
+  },
+  {
+    icon: UserSearch,
+    label: 'Talent',
+    description: 'Recruiting intelligence — find candidates, assess fit, generate outreach',
+    color: 'text-emerald-400',
+    bg: 'bg-emerald-500/10 border-emerald-500/20',
+  },
+  {
+    icon: Layers,
+    label: 'Bulk',
+    description: 'Research dozens of companies at once — paste domains or upload a CSV',
+    color: 'text-amber-400',
+    bg: 'bg-amber-500/10 border-amber-500/20',
+  },
 ]
 
 export function WelcomeModal({ onDismiss, onTryExample }: WelcomeModalProps) {
@@ -69,7 +99,7 @@ export function WelcomeModal({ onDismiss, onTryExample }: WelcomeModalProps) {
 
           <div className="p-8">
             {/* Header */}
-            <div className="flex items-center gap-3 mb-6">
+            <div className="flex items-center gap-3 mb-2">
               <div className="p-2.5 rounded-xl bg-gradient-to-br from-brand-500/20 to-brand-600/10 border border-brand-500/20">
                 <Sparkles className="w-5 h-5 text-brand-400" />
               </div>
@@ -80,46 +110,29 @@ export function WelcomeModal({ onDismiss, onTryExample }: WelcomeModalProps) {
             </div>
 
             {/* Value prop */}
-            <p className="text-sm text-white/50 leading-relaxed mb-6">
-              Enter any company domain and get a full intelligence report in seconds — SWOT analysis, pain points, key decision-makers, financial signals, and ready-to-send outreach emails.
+            <p className="text-sm text-white/50 leading-relaxed mb-5">
+              Research companies, compare competitors, discover prospects, and find talent — all powered by AI.
             </p>
 
-            {/* What you'll get */}
-            <div className="mb-6">
-              <div className="text-[10px] text-white/25 uppercase tracking-wider font-semibold mb-3">Every report includes</div>
-              <div className="grid grid-cols-5 gap-2">
-                {REPORT_SECTIONS.map((section) => {
-                  const Icon = section.icon
-                  return (
-                    <div
-                      key={section.label}
-                      className="flex flex-col items-center gap-1.5 p-2.5 rounded-xl bg-white/[0.02] border border-white/[0.05]"
-                    >
-                      <Icon className={`w-4 h-4 ${section.color}`} />
-                      <span className="text-[10px] text-white/40 font-medium text-center leading-tight">{section.label}</span>
+            {/* All 5 features */}
+            <div className="space-y-2 mb-6">
+              {FEATURES.map((feature) => {
+                const Icon = feature.icon
+                return (
+                  <div
+                    key={feature.label}
+                    className="flex items-start gap-3 p-3 rounded-xl bg-white/[0.02] border border-white/[0.04]"
+                  >
+                    <div className={`p-1.5 rounded-lg border shrink-0 ${feature.bg}`}>
+                      <Icon className={`w-3.5 h-3.5 ${feature.color}`} />
                     </div>
-                  )
-                })}
-              </div>
-            </div>
-
-            {/* How it works - 3 steps */}
-            <div className="mb-8">
-              <div className="text-[10px] text-white/25 uppercase tracking-wider font-semibold mb-3">How it works</div>
-              <div className="flex items-start gap-3">
-                {[
-                  { step: '1', text: 'Pick a research lens' },
-                  { step: '2', text: 'Enter a company domain' },
-                  { step: '3', text: 'Get your full report' },
-                ].map((item, i) => (
-                  <div key={i} className="flex-1 flex items-start gap-2">
-                    <div className="w-5 h-5 rounded-full bg-brand-500/15 border border-brand-500/25 flex items-center justify-center shrink-0">
-                      <span className="text-[10px] font-bold text-brand-400">{item.step}</span>
+                    <div className="min-w-0">
+                      <div className="text-xs font-semibold text-white/70 mb-0.5">{feature.label}</div>
+                      <div className="text-[11px] text-white/35 leading-snug">{feature.description}</div>
                     </div>
-                    <span className="text-xs text-white/40 leading-snug">{item.text}</span>
                   </div>
-                ))}
-              </div>
+                )
+              })}
             </div>
 
             {/* CTAs */}
@@ -130,8 +143,8 @@ export function WelcomeModal({ onDismiss, onTryExample }: WelcomeModalProps) {
                 whileTap={{ scale: 0.98 }}
                 className="flex-1 flex items-center justify-center gap-2 px-5 py-3 bg-gradient-to-r from-brand-600 to-brand-500 rounded-xl text-sm font-semibold text-white shadow-lg shadow-brand-600/25 hover:shadow-brand-500/40 transition-all"
               >
-                <Search className="w-4 h-4" />
-                Research my first company
+                Get started
+                <ArrowRight className="w-4 h-4" />
               </motion.button>
               <motion.button
                 onClick={handleTryExample}
