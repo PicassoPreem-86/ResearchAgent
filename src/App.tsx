@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Header } from '@/components/Header'
 import { SearchInput } from '@/components/SearchInput'
@@ -17,12 +17,16 @@ import { TalentInput } from '@/components/TalentInput'
 import { TalentProgress } from '@/components/TalentProgress'
 import { TalentResults } from '@/components/TalentResults'
 import { HistorySidebar } from '@/components/HistorySidebar'
+import { WelcomeModal } from '@/components/WelcomeModal'
+import { PostResearchNudge } from '@/components/PostResearchNudge'
 import { useResearch } from '@/hooks/useResearch'
 import { useBulkResearch } from '@/hooks/useBulkResearch'
 import { useComparison } from '@/hooks/useComparison'
 import { useDiscover } from '@/hooks/useDiscover'
 import { useTalent } from '@/hooks/useTalent'
 import { useHistory } from '@/hooks/useHistory'
+import { useOnboarding } from '@/hooks/useOnboarding'
+import { EXAMPLE_REPORT } from '@/data/exampleReport'
 import { AlertCircle, RotateCcw, Search, Layers, Swords, Crosshair, UserSearch } from 'lucide-react'
 import type { ProspectReport } from '@/types/prospect'
 
@@ -38,8 +42,18 @@ export default function App() {
   const discover = useDiscover()
   const talent = useTalent()
   const { history, isLoading: historyLoading, refresh: refreshHistory, deleteReport: deleteHistoryReport } = useHistory()
+  const { hasSeenWelcome, recordResearch } = useOnboarding()
+  const [showWelcome, setShowWelcome] = useState(!hasSeenWelcome)
+  const [isExampleReport, setIsExampleReport] = useState(false)
 
   const activeReport = loadedReport || report
+
+  // Track completed research for post-research nudges
+  useEffect(() => {
+    if (progress.stage === 'complete' && report) {
+      recordResearch()
+    }
+  }, [progress.stage, report, recordResearch])
 
   const showSingleInput = mode === 'single' && progress.stage === 'idle' && !loadedReport
   const showBulkInput = mode === 'bulk' && !bulk.isProcessing && !bulk.isComplete
@@ -69,7 +83,15 @@ export default function App() {
     discover.reset()
     talent.reset()
     setLoadedReport(null)
+    setIsExampleReport(false)
   }, [resetSingle, bulk, comparison, discover, talent])
+
+  const handleLoadExample = useCallback(() => {
+    handleReset()
+    setMode('single')
+    setLoadedReport(EXAMPLE_REPORT)
+    setIsExampleReport(true)
+  }, [handleReset])
 
   const handleModeSwitch = (newMode: AppMode) => {
     handleReset()
@@ -95,6 +117,17 @@ export default function App() {
 
   return (
     <div className="min-h-screen relative">
+      {/* Welcome modal for first-time users */}
+      {showWelcome && (
+        <WelcomeModal
+          onDismiss={() => setShowWelcome(false)}
+          onTryExample={() => {
+            setShowWelcome(false)
+            handleLoadExample()
+          }}
+        />
+      )}
+
       {/* Background ambient gradient */}
       <div className="fixed inset-0 pointer-events-none">
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[600px] bg-brand-600/[0.07] rounded-full blur-[120px]" />
@@ -130,61 +163,30 @@ export default function App() {
               className="flex justify-center mb-6"
             >
               <div className="inline-flex items-center gap-1 p-1 rounded-xl bg-white/[0.04] border border-white/[0.06]">
-                <button
-                  onClick={() => handleModeSwitch('single')}
-                  className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-medium transition-all duration-200 ${
-                    mode === 'single'
-                      ? 'bg-white/[0.08] text-white/80 shadow-sm'
-                      : 'text-white/30 hover:text-white/50'
-                  }`}
-                >
-                  <Search className="w-3.5 h-3.5" />
-                  Research
-                </button>
-                <button
-                  onClick={() => handleModeSwitch('compare')}
-                  className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-medium transition-all duration-200 ${
-                    mode === 'compare'
-                      ? 'bg-white/[0.08] text-white/80 shadow-sm'
-                      : 'text-white/30 hover:text-white/50'
-                  }`}
-                >
-                  <Swords className="w-3.5 h-3.5" />
-                  Compare
-                </button>
-                <button
-                  onClick={() => handleModeSwitch('discover')}
-                  className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-medium transition-all duration-200 ${
-                    mode === 'discover'
-                      ? 'bg-white/[0.08] text-white/80 shadow-sm'
-                      : 'text-white/30 hover:text-white/50'
-                  }`}
-                >
-                  <Crosshair className="w-3.5 h-3.5" />
-                  Discover
-                </button>
-                <button
-                  onClick={() => handleModeSwitch('talent')}
-                  className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-medium transition-all duration-200 ${
-                    mode === 'talent'
-                      ? 'bg-white/[0.08] text-white/80 shadow-sm'
-                      : 'text-white/30 hover:text-white/50'
-                  }`}
-                >
-                  <UserSearch className="w-3.5 h-3.5" />
-                  Talent
-                </button>
-                <button
-                  onClick={() => handleModeSwitch('bulk')}
-                  className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-medium transition-all duration-200 ${
-                    mode === 'bulk'
-                      ? 'bg-white/[0.08] text-white/80 shadow-sm'
-                      : 'text-white/30 hover:text-white/50'
-                  }`}
-                >
-                  <Layers className="w-3.5 h-3.5" />
-                  Bulk
-                </button>
+                {([
+                  { key: 'single' as AppMode, icon: Search, label: 'Research', tooltip: 'Deep-dive on a single company' },
+                  { key: 'compare' as AppMode, icon: Swords, label: 'Compare', tooltip: 'Side-by-side analysis of 2-5 companies' },
+                  { key: 'discover' as AppMode, icon: Crosshair, label: 'Discover', tooltip: 'Find lookalike companies or match your ICP' },
+                  { key: 'talent' as AppMode, icon: UserSearch, label: 'Talent', tooltip: 'Recruiting intel with candidate outreach' },
+                  { key: 'bulk' as AppMode, icon: Layers, label: 'Bulk', tooltip: 'Research dozens of domains at once' },
+                ] as const).map(({ key, icon: Icon, label, tooltip }) => (
+                  <div key={key} className="relative group/mode">
+                    <button
+                      onClick={() => handleModeSwitch(key)}
+                      className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-medium transition-all duration-200 ${
+                        mode === key
+                          ? 'bg-white/[0.08] text-white/80 shadow-sm'
+                          : 'text-white/30 hover:text-white/50'
+                      }`}
+                    >
+                      <Icon className="w-3.5 h-3.5" />
+                      {label}
+                    </button>
+                    <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 px-3 py-1.5 rounded-lg bg-gray-900 border border-white/[0.08] text-[11px] text-white/50 whitespace-nowrap opacity-0 group-hover/mode:opacity-100 transition-opacity duration-200 pointer-events-none z-50 shadow-xl">
+                      {tooltip}
+                    </div>
+                  </div>
+                ))}
               </div>
             </motion.div>
           )}
@@ -200,7 +202,7 @@ export default function App() {
               transition={{ duration: 0.4 }}
               className="flex items-center justify-center min-h-[calc(100vh-12rem)]"
             >
-              <SearchInput onSearch={startResearch} isLoading={false} />
+              <SearchInput onSearch={startResearch} isLoading={false} onLoadExample={handleLoadExample} />
             </motion.div>
           )}
 
@@ -347,7 +349,36 @@ export default function App() {
               transition={{ duration: 0.4 }}
               className="pt-4"
             >
+              {/* Example report banner */}
+              {isExampleReport && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="w-full max-w-4xl mx-auto mb-6"
+                >
+                  <div className="flex items-center justify-between px-4 py-3 rounded-xl bg-brand-500/8 border border-brand-500/15">
+                    <span className="text-xs text-brand-300/70">
+                      This is an example report for stripe.com — research your own company to get started
+                    </span>
+                    <motion.button
+                      onClick={handleResetFromResults}
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      className="text-xs font-medium text-brand-400 hover:text-brand-300 transition-colors ml-4 shrink-0"
+                    >
+                      Try it yourself →
+                    </motion.button>
+                  </div>
+                </motion.div>
+              )}
               <ResultsPanel report={activeReport} onReset={handleResetFromResults} />
+              {/* Post-research nudge for cross-mode discovery */}
+              {!isExampleReport && (
+                <PostResearchNudge
+                  companyDomain={activeReport.company.domain}
+                  onSwitchMode={(newMode) => handleModeSwitch(newMode)}
+                />
+              )}
             </motion.div>
           )}
 

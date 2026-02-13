@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Search, ChevronDown, User, Building2, Briefcase, ArrowRight, Globe, Package, FileText, TrendingUp, Swords, Handshake, Mail } from 'lucide-react'
+import { Search, ChevronDown, User, Building2, Briefcase, ArrowRight, Globe, Package, FileText, TrendingUp, Swords, Handshake, Mail, Eye } from 'lucide-react'
+import { OnboardingHint } from '@/components/OnboardingHint'
+import { useOnboarding } from '@/hooks/useOnboarding'
 import type { EmailTone, SellerContext, ReportTemplate } from '@/types/prospect'
 
 const EXAMPLE_DOMAINS = [
@@ -44,9 +46,10 @@ interface SearchInputProps {
     template?: ReportTemplate,
   ) => void
   isLoading: boolean
+  onLoadExample?: () => void
 }
 
-export function SearchInput({ onSearch, isLoading }: SearchInputProps) {
+export function SearchInput({ onSearch, isLoading, onLoadExample }: SearchInputProps) {
   const [domain, setDomain] = useState('')
   const [showContext, setShowContext] = useState(false)
   const [senderName, setSenderName] = useState('')
@@ -58,6 +61,7 @@ export function SearchInput({ onSearch, isLoading }: SearchInputProps) {
   const [valueProposition, setValueProposition] = useState('')
   const [placeholderIndex, setPlaceholderIndex] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
+  const { hasSeenLensHint, hasSeenToneHint, hasSeenContextHint, dismissLensHint, dismissToneHint, dismissContextHint } = useOnboarding()
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -102,11 +106,27 @@ export function SearchInput({ onSearch, isLoading }: SearchInputProps) {
         <p className="text-base text-white/40 max-w-md mx-auto leading-relaxed">
           AI-powered company intelligence. Pick a lens, enter a domain, get a deep research report.
         </p>
+        {onLoadExample && (
+          <motion.button
+            type="button"
+            onClick={onLoadExample}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 1 }}
+            className="inline-flex items-center gap-1.5 mt-4 text-xs text-brand-400/60 hover:text-brand-400 transition-colors"
+          >
+            <Eye className="w-3.5 h-3.5" />
+            See an example report
+          </motion.button>
+        )}
       </div>
 
       {/* Template selector */}
       <div className="mb-6">
         <div className="text-[10px] text-white/25 uppercase tracking-wider font-semibold mb-3 text-center">Research Lens</div>
+        <OnboardingHint visible={!hasSeenLensHint} onDismiss={dismissLensHint} position="above">
+          Choose what angle matters most — this shapes the entire report
+        </OnboardingHint>
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
           {TEMPLATES.map((tmpl) => {
             const Icon = tmpl.icon
@@ -186,6 +206,9 @@ export function SearchInput({ onSearch, isLoading }: SearchInputProps) {
         </div>
 
         {/* Tone selector */}
+        <OnboardingHint visible={!hasSeenToneHint} onDismiss={dismissToneHint}>
+          This controls the tone of outreach emails in your report
+        </OnboardingHint>
         <div className="flex items-center justify-center gap-2 mt-5">
           <span className="text-[10px] text-white/25 uppercase tracking-wider font-semibold mr-1">Tone</span>
           {TONE_OPTIONS.map((opt) => (
@@ -206,16 +229,21 @@ export function SearchInput({ onSearch, isLoading }: SearchInputProps) {
           ))}
         </div>
 
-        <motion.button
-          type="button"
-          onClick={() => setShowContext(!showContext)}
-          className="flex items-center gap-1.5 mx-auto mt-4 text-xs text-white/30 hover:text-white/50 transition-colors"
-        >
-          <span>Add sender context for better personalization</span>
-          <motion.div animate={{ rotate: showContext ? 180 : 0 }} transition={{ duration: 0.2 }}>
-            <ChevronDown className="w-3.5 h-3.5" />
-          </motion.div>
-        </motion.button>
+        <div className="flex flex-col items-center">
+          <motion.button
+            type="button"
+            onClick={() => setShowContext(!showContext)}
+            className="flex items-center gap-1.5 mx-auto mt-4 text-xs text-white/30 hover:text-white/50 transition-colors"
+          >
+            <span>Add sender context for better personalization</span>
+            <motion.div animate={{ rotate: showContext ? 180 : 0 }} transition={{ duration: 0.2 }}>
+              <ChevronDown className="w-3.5 h-3.5" />
+            </motion.div>
+          </motion.button>
+          <OnboardingHint visible={!hasSeenContextHint} onDismiss={dismissContextHint}>
+            Add your product info for hyper-personalized outreach emails
+          </OnboardingHint>
+        </div>
 
         <AnimatePresence>
           {showContext && (
