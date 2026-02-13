@@ -1,9 +1,11 @@
 import * as cheerio from 'cheerio'
+import { firecrawlScrape } from './firecrawl.js'
 
 export interface ScrapedPage {
   url: string
   title: string
   text: string
+  markdown?: string
   links: string[]
   meta: Record<string, string>
 }
@@ -65,6 +67,26 @@ async function fetchPage(url: string): Promise<string | null> {
   } catch {
     return null
   }
+}
+
+async function fetchPageEnhanced(url: string): Promise<{
+  html: string | null
+  markdown: string | null
+  metadata: Record<string, string>
+}> {
+  // Try Firecrawl first — better content extraction, handles JS-rendered pages
+  const fcResult = await firecrawlScrape(url)
+  if (fcResult && (fcResult.markdown || fcResult.html)) {
+    return {
+      html: fcResult.html || null,
+      markdown: fcResult.markdown || null,
+      metadata: fcResult.metadata,
+    }
+  }
+
+  // Fallback to direct fetch
+  const html = await fetchPage(url)
+  return { html, markdown: null, metadata: {} }
 }
 
 function extractPage(html: string, url: string): ScrapedPage {
@@ -424,31 +446,61 @@ export async function scrapeCompany(
     rawTexts: '',
   }
 
-  // Scrape homepage
+  // Scrape homepage (Firecrawl → Cheerio fallback)
   onProgress?.('Fetching homepage...')
   await onScrapeDetail?.({ url: baseUrl, status: 'fetching', pageType: 'homepage' })
-  const homepageHtml = await fetchPage(baseUrl)
-  if (homepageHtml) {
-    result.homepage = extractPage(homepageHtml, baseUrl)
-    result.detectedTech = detectTechStack(homepageHtml)
-    result.structuredData = extractStructuredData(homepageHtml)
+  const homepageData = await fetchPageEnhanced(baseUrl)
+  if (homepageData.html || homepageData.markdown) {
+    if (homepageData.html) {
+      result.homepage = extractPage(homepageData.html, baseUrl)
+      result.detectedTech = detectTechStack(homepageData.html)
+      result.structuredData = extractStructuredData(homepageData.html)
+    } else {
+      // Markdown-only from Firecrawl (no raw HTML returned)
+      result.homepage = {
+        url: baseUrl,
+        title: homepageData.metadata?.title || '',
+        text: homepageData.markdown?.slice(0, 15000) || '',
+        markdown: homepageData.markdown || undefined,
+        links: [],
+        meta: homepageData.metadata || {},
+      }
+    }
+    // Prefer Firecrawl markdown for AI analysis when available
+    if (homepageData.markdown && result.homepage) {
+      result.homepage.markdown = homepageData.markdown
+    }
     await onScrapeDetail?.({ url: baseUrl, status: 'success', pageType: 'homepage' })
   } else {
     await onScrapeDetail?.({ url: baseUrl, status: 'failed', pageType: 'homepage' })
   }
 
-  // Find and scrape about page
+  // Find and scrape about page (Firecrawl → Cheerio fallback)
   const aboutUrl = result.homepage ? findAboutPage(result.homepage, baseUrl) : baseUrl + '/about'
   if (aboutUrl) {
     onProgress?.('Scanning about page...')
     await onScrapeDetail?.({ url: aboutUrl, status: 'fetching', pageType: 'about' })
-    const aboutHtml = await fetchPage(aboutUrl)
-    if (aboutHtml) {
-      result.about = extractPage(aboutHtml, aboutUrl)
-      const $about = cheerio.load(aboutHtml)
-      const aboutMembers = extractTeamMembers($about)
-      if (aboutMembers.length > 0) {
-        result.teamMembers = aboutMembers
+    const aboutData = await fetchPageEnhanced(aboutUrl)
+    if (aboutData.html || aboutData.markdown) {
+      if (aboutData.html) {
+        result.about = extractPage(aboutData.html, aboutUrl)
+        const $about = cheerio.load(aboutData.html)
+        const aboutMembers = extractTeamMembers($about)
+        if (aboutMembers.length > 0) {
+          result.teamMembers = aboutMembers
+        }
+      } else {
+        result.about = {
+          url: aboutUrl,
+          title: aboutData.metadata?.title || '',
+          text: aboutData.markdown?.slice(0, 15000) || '',
+          markdown: aboutData.markdown || undefined,
+          links: [],
+          meta: aboutData.metadata || {},
+        }
+      }
+      if (aboutData.markdown && result.about) {
+        result.about.markdown = aboutData.markdown
       }
       await onScrapeDetail?.({ url: aboutUrl, status: 'success', pageType: 'about' })
     } else {
@@ -514,25 +566,30 @@ export async function scrapeCompany(
   onProgress?.('Searching for recent news...')
   result.newsItems = await scrapeNews(companyName, domain)
 
-  // Compile raw texts for AI analysis
+  // Compile raw texts for AI analysis (prefer Firecrawl markdown when available)
   const parts: string[] = []
   if (result.homepage) {
-    parts.push(`=== HOMEPAGE (${result.homepage.url}) ===\nTitle: ${result.homepage.title}\n${result.homepage.text}`)
+    const hpContent = result.homepage.markdown || result.homepage.text
+    parts.push(`=== HOMEPAGE (${result.homepage.url}) ===\nTitle: ${result.homepage.title}\n${hpContent}`)
     if (Object.keys(result.homepage.meta).length > 0) {
       parts.push(`Meta: ${JSON.stringify(result.homepage.meta)}`)
     }
   }
   if (result.about) {
-    parts.push(`\n=== ABOUT PAGE (${result.about.url}) ===\nTitle: ${result.about.title}\n${result.about.text}`)
+    const aboutContent = result.about.markdown || result.about.text
+    parts.push(`\n=== ABOUT PAGE (${result.about.url}) ===\nTitle: ${result.about.title}\n${aboutContent}`)
   }
   if (result.careers) {
-    parts.push(`\n=== CAREERS PAGE (${result.careers.url}) ===\nTitle: ${result.careers.title}\n${result.careers.text}`)
+    const careersContent = result.careers.markdown || result.careers.text
+    parts.push(`\n=== CAREERS PAGE (${result.careers.url}) ===\nTitle: ${result.careers.title}\n${careersContent}`)
   }
   if (result.pricing) {
-    parts.push(`\n=== PRICING PAGE (${result.pricing.url}) ===\nTitle: ${result.pricing.title}\n${result.pricing.text}`)
+    const pricingContent = result.pricing.markdown || result.pricing.text
+    parts.push(`\n=== PRICING PAGE (${result.pricing.url}) ===\nTitle: ${result.pricing.title}\n${pricingContent}`)
   }
   if (result.blog) {
-    parts.push(`\n=== BLOG / RESOURCES (${result.blog.url}) ===\nTitle: ${result.blog.title}\n${result.blog.text.slice(0, 5000)}`)
+    const blogContent = result.blog.markdown || result.blog.text
+    parts.push(`\n=== BLOG / RESOURCES (${result.blog.url}) ===\nTitle: ${result.blog.title}\n${blogContent.slice(0, 5000)}`)
   }
   if (result.jobListings.length > 0) {
     parts.push(`\n=== JOB LISTINGS ===\n${result.jobListings.join('\n')}`)

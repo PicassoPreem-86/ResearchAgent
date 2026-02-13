@@ -4,6 +4,8 @@ import { scrapeCompany } from './scraper.js'
 import type { ICP, DiscoveredCompany, GeoTarget } from '../types/prospect.js'
 import { geoTargetToQueryString, geoTargetToLabel, hasGeoSelections } from '../types/prospect.js'
 import { extractStructuredData } from './scraper.js'
+import { firecrawlScrape } from './firecrawl.js'
+import { getDomainOverview, getOrganicCompetitors, formatTraffic } from './semrush.js'
 
 const client = new OpenAI()
 
@@ -349,25 +351,51 @@ async function enrichTopCompanies(
   const enriched = await Promise.all(
     toEnrich.map(async (company) => {
       try {
-        const html = await fetchHtml(`https://${company.domain}`)
-        if (!html) return company
+        // Try Firecrawl first, fall back to direct fetch
+        let title = ''
+        let metaDesc = ''
+        let bodyText = ''
+        let orgData: { raw: Record<string, unknown> } | undefined
+        let semrushInfo = ''
 
-        const $ = cheerio.load(html)
-        $('script, style, nav, footer, iframe, noscript, svg').remove()
+        const fcResult = await firecrawlScrape(`https://${company.domain}`)
+        if (fcResult) {
+          title = fcResult.metadata?.title || ''
+          metaDesc = fcResult.metadata?.description || fcResult.metadata?.['og:description'] || ''
+          bodyText = fcResult.markdown?.slice(0, 3000) || ''
 
-        const title = $('title').text().trim()
-        const metaDesc = $('meta[name="description"]').attr('content') || $('meta[property="og:description"]').attr('content') || ''
-        const bodyText = $('body').text().replace(/\s+/g, ' ').trim().slice(0, 3000)
+          // Still extract structured data from HTML if available
+          if (fcResult.html) {
+            const structuredData = extractStructuredData(fcResult.html)
+            orgData = structuredData.find((s) => s.type === 'Organization' || s.type === 'Corporation')
+          }
+        } else {
+          // Fallback to direct fetch + Cheerio
+          const html = await fetchHtml(`https://${company.domain}`)
+          if (!html) return company
 
-        // Extract structured data for additional context
-        const structuredData = extractStructuredData(html)
-        const orgData = structuredData.find((s) => s.type === 'Organization' || s.type === 'Corporation')
+          const $ = cheerio.load(html)
+          $('script, style, nav, footer, iframe, noscript, svg').remove()
+
+          title = $('title').text().trim()
+          metaDesc = $('meta[name="description"]').attr('content') || $('meta[property="og:description"]').attr('content') || ''
+          bodyText = $('body').text().replace(/\s+/g, ' ').trim().slice(0, 3000)
+
+          const structuredData = extractStructuredData(html)
+          orgData = structuredData.find((s) => s.type === 'Organization' || s.type === 'Corporation')
+        }
+
+        // Fetch SEMRush metrics in parallel
+        const overview = await getDomainOverview(company.domain)
+        if (overview && overview.organicTraffic > 0) {
+          semrushInfo = ` [Traffic: ${formatTraffic(overview.organicTraffic)}/mo, ${formatTraffic(overview.organicKeywords)} keywords]`
+        }
 
         return {
           ...company,
           name: title?.split(/[|\-–—]/)?.[0]?.trim() || company.name,
-          description: metaDesc || bodyText.slice(0, 300),
-          industry: orgData?.raw?.industry as string || undefined,
+          description: (metaDesc || bodyText.slice(0, 300)) + semrushInfo,
+          industry: (orgData?.raw?.industry as string) || undefined,
           estimatedSize: orgData?.raw?.numberOfEmployees
             ? JSON.stringify(orgData.raw.numberOfEmployees)
             : undefined,
@@ -607,7 +635,7 @@ Respond with JSON:
 
   const allRaw: { domain: string; name: string; snippet: string; source: string }[] = []
 
-  // Run Google searches in parallel
+  // Run Google searches + SEMRush competitor lookup in parallel
   const googlePromises = queries.map(async (q) => {
     const results = await searchGoogle(q)
     return results.map((r) => ({
@@ -618,10 +646,25 @@ Respond with JSON:
     }))
   })
 
-  const googleResults = await Promise.all(googlePromises)
+  // SEMRush organic competitors — real competitive intelligence
+  const semrushPromise = getOrganicCompetitors(referenceDomain, 'us', 20).then((competitors) => {
+    return competitors.map((c) => ({
+      domain: c.domain,
+      name: c.domain.split('.')[0],
+      snippet: `Organic competitor — ${formatTraffic(c.organicTraffic)}/mo traffic, ${formatTraffic(c.commonKeywords)} shared keywords`,
+      source: 'semrush',
+    }))
+  }).catch(() => [] as { domain: string; name: string; snippet: string; source: string }[])
+
+  const [googleResults, semrushResults] = await Promise.all([
+    Promise.all(googlePromises),
+    semrushPromise,
+  ])
+
   for (const batch of googleResults) {
     allRaw.push(...batch)
   }
+  allRaw.push(...semrushResults)
 
   // Also search YC directory
   const ycResults = await searchYCDirectory(attributes.industry)

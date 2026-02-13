@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@hono/node-server": "^1.13.0",
+    "@mendable/firecrawl-js": "^4.12.1",
     "cheerio": "^1.0.0",
     "dotenv": "^17.3.1",
     "framer-motion": "^11.15.0",
