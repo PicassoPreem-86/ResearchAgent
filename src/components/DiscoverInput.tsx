@@ -1,7 +1,8 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Search, Globe, ArrowRight, Crosshair, Users, X, Save, Loader2, MapPin, ChevronDown } from 'lucide-react'
+import { Search, Globe, ArrowRight, Crosshair, Users, Save, Loader2, MapPin, ChevronDown } from 'lucide-react'
 import { GeoPicker } from '@/components/GeoPicker'
+import { TagInput } from '@/components/TagInput'
 import type { ICP } from '@/types/prospect'
 import type { GeoTarget } from '@/types/prospect'
 import { EMPTY_GEO_TARGET, hasGeoSelections, migrateGeography } from '@/types/prospect'
@@ -41,72 +42,6 @@ interface DiscoverInputProps {
   onSaveICP: (icp: ICP) => Promise<void>
   loadICP: () => Promise<ICP | null>
   isLoading: boolean
-}
-
-function TagInput({
-  tags,
-  onAdd,
-  onRemove,
-  placeholder,
-}: {
-  tags: string[]
-  onAdd: (tag: string) => void
-  onRemove: (index: number) => void
-  placeholder: string
-}) {
-  const [input, setInput] = useState('')
-  const inputRef = useRef<HTMLInputElement>(null)
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' || e.key === ',') {
-      e.preventDefault()
-      const trimmed = input.trim().replace(/,$/, '')
-      if (trimmed && !tags.includes(trimmed)) {
-        onAdd(trimmed)
-        setInput('')
-      }
-    } else if (e.key === 'Backspace' && !input && tags.length > 0) {
-      onRemove(tags.length - 1)
-    }
-  }
-
-  return (
-    <div
-      className="glass p-3 flex flex-wrap items-center gap-1.5 min-h-[42px] cursor-text"
-      onClick={() => inputRef.current?.focus()}
-    >
-      {tags.map((tag, i) => (
-        <motion.span
-          key={tag}
-          initial={{ opacity: 0, scale: 0.8 }}
-          animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 0.8 }}
-          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-brand-500/15 border border-brand-500/25 text-xs font-medium text-brand-300"
-        >
-          {tag}
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation()
-              onRemove(i)
-            }}
-            className="text-brand-300/50 hover:text-brand-300 transition-colors"
-          >
-            <X className="w-3 h-3" />
-          </button>
-        </motion.span>
-      ))}
-      <input
-        ref={inputRef}
-        type="text"
-        value={input}
-        onChange={(e) => setInput(e.target.value)}
-        onKeyDown={handleKeyDown}
-        placeholder={tags.length === 0 ? placeholder : ''}
-        className="bg-transparent text-sm text-white placeholder:text-white/20 outline-none flex-1 min-w-[80px] py-0.5"
-      />
-    </div>
-  )
 }
 
 export function DiscoverInput({ onSearchLookalike, onSearchICP, onSaveICP, loadICP, isLoading }: DiscoverInputProps) {
@@ -403,7 +338,7 @@ export function DiscoverInput({ onSearchLookalike, onSearchICP, onSaveICP, loadI
               </div>
 
               {/* Action buttons */}
-              <div className="flex items-center justify-between pt-2">
+              <div className="flex items-center justify-between pt-2 flex-wrap gap-3">
                 <motion.button
                   type="button"
                   onClick={handleSaveICP}
@@ -420,7 +355,7 @@ export function DiscoverInput({ onSearchLookalike, onSearchICP, onSaveICP, loadI
                   disabled={!icpValid || isLoading}
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
-                  className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-brand-600 to-brand-500 rounded-xl text-sm font-semibold text-white shadow-lg shadow-brand-600/25 disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-200 hover:shadow-brand-500/40"
+                  className="flex items-center gap-2 px-5 sm:px-6 py-3 bg-gradient-to-r from-brand-600 to-brand-500 rounded-xl text-sm font-semibold text-white shadow-lg shadow-brand-600/25 disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-200 hover:shadow-brand-500/40"
                 >
                   <Search className="w-4 h-4" />
                   <span>Discover Companies</span>

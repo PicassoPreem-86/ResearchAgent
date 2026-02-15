@@ -123,12 +123,12 @@ export function BulkMode({ onStartBulk, isLoading }: BulkModeProps) {
               : 'bg-gradient-to-r from-brand-600/20 via-blue-500/20 to-cyan-500/20 opacity-0 group-focus-within:opacity-100'
           }`} />
           <div className="relative glass glow-sm p-4">
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
               <div className="flex items-center gap-2">
                 <List className="w-4 h-4 text-white/25" />
                 <span className="text-xs text-white/30 font-medium">One domain per line</span>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 {csvFile && (
                   <motion.div
                     initial={{ opacity: 0, scale: 0.8 }}
@@ -167,7 +167,7 @@ export function BulkMode({ onStartBulk, isLoading }: BulkModeProps) {
             />
 
             {/* Action row */}
-            <div className="flex items-center justify-between mt-3 pt-3 border-t border-white/[0.04]">
+            <div className="flex items-center justify-between mt-3 pt-3 border-t border-white/[0.04] flex-wrap gap-3">
               <div className="flex items-center gap-2">
                 <input
                   ref={fileInputRef}

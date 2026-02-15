@@ -1,12 +1,14 @@
 import { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Copy, Check, Send, Minus, X, Square, Pencil, Eye } from 'lucide-react'
+import { Copy, Check, Send, Minus, X, Square, Pencil, Eye, ClipboardCopy } from 'lucide-react'
 import type { OutreachEmail } from '@/types/prospect'
+import { copyToClipboard } from '@/utils/exportFormatters'
 
 interface EmailPreviewProps {
   email: OutreachEmail
   emails?: OutreachEmail[]
   recipientDomain?: string
+  onToast?: (message: string, variant?: 'success' | 'error') => void
 }
 
 function CopyButton({ text, label }: { text: string; label: string }) {
@@ -38,7 +40,7 @@ function CopyButton({ text, label }: { text: string; label: string }) {
   )
 }
 
-export function EmailPreview({ email, emails, recipientDomain }: EmailPreviewProps) {
+export function EmailPreview({ email, emails, recipientDomain, onToast }: EmailPreviewProps) {
   const allEmails = emails && emails.length > 0 ? emails : [email]
   const [activeIndex, setActiveIndex] = useState(0)
   const [isEditing, setIsEditing] = useState(false)
@@ -160,13 +162,13 @@ export function EmailPreview({ email, emails, recipientDomain }: EmailPreviewPro
       </div>
 
       {/* Email header fields */}
-      <div className="px-5 pt-4 space-y-2.5 border-b border-white/[0.04] pb-4">
-        <div className="flex items-center gap-3">
-          <span className="text-xs text-white/25 w-12 text-right shrink-0">To</span>
-          <span className="text-sm text-white/50">prospect@{recipientDomain || 'company.com'}</span>
+      <div className="px-3 sm:px-5 pt-4 space-y-2.5 border-b border-white/[0.04] pb-4">
+        <div className="flex items-center gap-2 sm:gap-3">
+          <span className="text-xs text-white/25 w-10 sm:w-12 text-right shrink-0">To</span>
+          <span className="text-sm text-white/50 truncate">prospect@{recipientDomain || 'company.com'}</span>
         </div>
-        <div className="flex items-center gap-3">
-          <span className="text-xs text-white/25 w-12 text-right shrink-0">Subject</span>
+        <div className="flex items-center gap-2 sm:gap-3">
+          <span className="text-xs text-white/25 w-10 sm:w-12 text-right shrink-0">Subject</span>
           <div className="flex items-center gap-2 flex-1 min-w-0">
             {isEditing ? (
               <input
@@ -191,7 +193,7 @@ export function EmailPreview({ email, emails, recipientDomain }: EmailPreviewPro
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.2 }}
-          className="px-5 py-5"
+          className="px-3 sm:px-5 py-4 sm:py-5"
         >
           <div className="relative">
             {isEditing ? (
@@ -214,7 +216,7 @@ export function EmailPreview({ email, emails, recipientDomain }: EmailPreviewPro
       </AnimatePresence>
 
       {/* Send bar */}
-      <div className="flex items-center justify-between px-5 py-3 bg-white/[0.02] border-t border-white/[0.04]">
+      <div className="flex items-center justify-between px-3 sm:px-5 py-3 bg-white/[0.02] border-t border-white/[0.04]">
         <div className="flex items-center gap-2">
           <motion.button
             whileHover={{ scale: 1.03 }}
@@ -225,11 +227,28 @@ export function EmailPreview({ email, emails, recipientDomain }: EmailPreviewPro
             <span>Send</span>
           </motion.button>
         </div>
+        <motion.button
+          onClick={async () => {
+            const fullEmail = `Subject: ${activeSubject}\n\n${activeBody}`
+            try {
+              await copyToClipboard(fullEmail)
+              onToast?.('Email copied to clipboard')
+            } catch {
+              onToast?.('Failed to copy', 'error')
+            }
+          }}
+          whileHover={{ scale: 1.03 }}
+          whileTap={{ scale: 0.97 }}
+          className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white/[0.05] hover:bg-white/[0.1] text-xs font-medium text-white/40 hover:text-white/60 transition-all duration-200"
+        >
+          <ClipboardCopy className="w-3.5 h-3.5" />
+          <span>Copy email</span>
+        </motion.button>
       </div>
 
       {/* Personalization notes */}
       {currentEmail.personalizationNotes.length > 0 && (
-        <div className="px-5 py-4 bg-brand-500/[0.04] border-t border-brand-500/10">
+        <div className="px-3 sm:px-5 py-4 bg-brand-500/[0.04] border-t border-brand-500/10">
           <div className="text-[10px] text-brand-300/50 uppercase tracking-wider font-semibold mb-2.5">
             Personalization Notes
           </div>

@@ -1,7 +1,8 @@
-import { useState, useRef } from 'react'
+import { useState } from 'react'
 import { motion } from 'framer-motion'
-import { UserSearch, Briefcase, ArrowRight, X, ChevronDown } from 'lucide-react'
+import { UserSearch, Briefcase, ArrowRight, ChevronDown } from 'lucide-react'
 import { GeoPicker } from '@/components/GeoPicker'
+import { TagInput } from '@/components/TagInput'
 import type { GeoTarget } from '@/types/prospect'
 import { EMPTY_GEO_TARGET, hasGeoSelections } from '@/types/prospect'
 
@@ -17,71 +18,6 @@ const SENIORITY_OPTIONS = [
 interface TalentInputProps {
   onSearch: (targetRole: string, targetSkills: string[], location?: GeoTarget, seniority?: string) => void
   isLoading: boolean
-}
-
-function SkillTagInput({
-  tags,
-  onAdd,
-  onRemove,
-  placeholder,
-}: {
-  tags: string[]
-  onAdd: (tag: string) => void
-  onRemove: (index: number) => void
-  placeholder: string
-}) {
-  const [input, setInput] = useState('')
-  const inputRef = useRef<HTMLInputElement>(null)
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' || e.key === ',') {
-      e.preventDefault()
-      const trimmed = input.trim().replace(/,$/, '')
-      if (trimmed && !tags.includes(trimmed)) {
-        onAdd(trimmed)
-        setInput('')
-      }
-    } else if (e.key === 'Backspace' && !input && tags.length > 0) {
-      onRemove(tags.length - 1)
-    }
-  }
-
-  return (
-    <div
-      className="glass p-3 flex flex-wrap items-center gap-1.5 min-h-[42px] cursor-text"
-      onClick={() => inputRef.current?.focus()}
-    >
-      {tags.map((tag, i) => (
-        <motion.span
-          key={tag}
-          initial={{ opacity: 0, scale: 0.8 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-cyan-500/15 border border-cyan-500/25 text-xs font-medium text-cyan-300"
-        >
-          {tag}
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation()
-              onRemove(i)
-            }}
-            className="text-cyan-300/50 hover:text-cyan-300 transition-colors"
-          >
-            <X className="w-3 h-3" />
-          </button>
-        </motion.span>
-      ))}
-      <input
-        ref={inputRef}
-        type="text"
-        value={input}
-        onChange={(e) => setInput(e.target.value)}
-        onKeyDown={handleKeyDown}
-        placeholder={tags.length === 0 ? placeholder : ''}
-        className="bg-transparent text-sm text-white placeholder:text-white/20 outline-none flex-1 min-w-[80px] py-0.5"
-      />
-    </div>
-  )
 }
 
 export function TalentInput({ onSearch, isLoading }: TalentInputProps) {
@@ -160,11 +96,12 @@ export function TalentInput({ onSearch, isLoading }: TalentInputProps) {
           <label className="text-[10px] text-white/25 uppercase tracking-wider font-semibold mb-1.5 block">
             Required Skills <span className="text-white/15">(optional)</span>
           </label>
-          <SkillTagInput
+          <TagInput
             tags={targetSkills}
             onAdd={(t) => setTargetSkills([...targetSkills, t])}
             onRemove={(i) => setTargetSkills(targetSkills.filter((_, idx) => idx !== i))}
             placeholder="React, TypeScript, Node.js..."
+            accent="cyan"
           />
         </div>
 

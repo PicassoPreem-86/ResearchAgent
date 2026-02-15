@@ -97,7 +97,7 @@ export function WelcomeModal({ onDismiss, onTryExample }: WelcomeModalProps) {
             <X className="w-4 h-4" />
           </button>
 
-          <div className="p-8">
+          <div className="p-5 sm:p-8">
             {/* Header */}
             <div className="flex items-center gap-3 mb-2">
               <div className="p-2.5 rounded-xl bg-gradient-to-br from-brand-500/20 to-brand-600/10 border border-brand-500/20">

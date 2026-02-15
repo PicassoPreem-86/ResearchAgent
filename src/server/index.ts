@@ -4,7 +4,10 @@ import 'dotenv/config'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { serve } from '@hono/node-server'
+import { serveStatic } from '@hono/node-server/serve-static'
 import { streamSSE } from 'hono/streaming'
+import fs from 'fs'
+import path from 'path'
 import { scrapeCompany } from './scraper.js'
 import { analyzeCompany, generateComparison } from './analyzer.js'
 import { parseCsvDomains, processBulk, generateCsv } from './bulk.js'
@@ -12,16 +15,42 @@ import { saveReport, getHistory, deleteReport } from './history.js'
 import { generatePdf, generateComparisonPdf } from './pdf.js'
 import { discoverByICP, discoverLookalike, discoverByKeywords } from './discover.js'
 import { saveICP, loadICP } from './icp.js'
+import { validateDomain } from './validate.js'
 import { searchTalent } from './talent.js'
+import { createRateLimiter } from './rateLimit.js'
+import { getCached, setCache, getCacheStats } from './cache.js'
 import type { ResearchProgress, EmailTone, SellerContext, ReportTemplate, ProspectReport, ComparisonReport, ICP, DiscoverResults, TalentReport, GeoTarget } from '../types/prospect.js'
 import { migrateGeography } from '../types/prospect.js'
 
-const app = new Hono()
+const startTime = Date.now()
+export const app = new Hono()
 
-app.use('*', cors({ origin: ['http://localhost:5173', 'http://127.0.0.1:5173'] }))
+const allowedOrigins = process.env.CORS_ORIGIN
+  ? process.env.CORS_ORIGIN.split(',')
+  : ['http://localhost:5173', 'http://127.0.0.1:5173']
+
+app.use('*', cors({ origin: allowedOrigins }))
+
+// Rate limiting
+const generalLimiter = createRateLimiter({ maxRequests: 30, windowMs: 60_000 })
+const researchLimiter = createRateLimiter({ maxRequests: 10, windowMs: 60_000 })
+
+app.use('/api/*', generalLimiter)
+app.use('/api/research/*', researchLimiter)
+app.use('/api/discover/*', researchLimiter)
+app.use('/api/talent/*', researchLimiter)
+app.post('/api/research', researchLimiter)
 
 // Health check
-app.get('/api/health', (c) => c.json({ status: 'ok' }))
+app.get('/api/health', (c) => c.json({
+  status: 'ok',
+  version: '1.0.0',
+  environment: process.env.NODE_ENV || 'development',
+  uptime: Math.floor((Date.now() - startTime) / 1000),
+}))
+
+// Cache stats
+app.get('/api/cache/stats', (c) => c.json(getCacheStats()))
 
 // Non-streaming research endpoint
 app.post('/api/research', async (c) => {
@@ -38,9 +67,20 @@ app.post('/api/research', async (c) => {
       return c.json({ error: 'domain is required' }, 400)
     }
 
-    const domain = body.domain.replace(/^https?:\/\//, '').replace(/\/.*$/, '')
+    let domain: string
+    try {
+      domain = validateDomain(body.domain)
+    } catch (err) {
+      return c.json({ error: err instanceof Error ? err.message : 'Invalid domain' }, 400)
+    }
 
-    const scrapedData = await scrapeCompany(domain)
+    const fresh = c.req.query('fresh') === 'true'
+    let scrapedData = fresh ? null : getCached(domain)
+    if (!scrapedData) {
+      scrapedData = await scrapeCompany(domain)
+      setCache(domain, scrapedData)
+    }
+
     const report = await analyzeCompany(domain, scrapedData, body.senderContext, undefined, body.tone, body.sellerContext, body.template)
 
     saveReport(report)
@@ -67,7 +107,14 @@ app.post('/api/research/stream', async (c) => {
       return c.json({ error: 'domain is required' }, 400)
     }
 
-    const domain = body.domain.replace(/^https?:\/\//, '').replace(/\/.*$/, '')
+    let domain: string
+    try {
+      domain = validateDomain(body.domain)
+    } catch (err) {
+      return c.json({ error: err instanceof Error ? err.message : 'Invalid domain' }, 400)
+    }
+
+    const fresh = c.req.query('fresh') === 'true'
 
     return streamSSE(c, async (stream) => {
       const sendEvent = async (data: ResearchProgress) => {
@@ -75,26 +122,37 @@ app.post('/api/research/stream', async (c) => {
       }
 
       try {
-        // Stage 1: Scraping
-        await sendEvent({ stage: 'scraping', message: 'Analyzing homepage...', progress: 10 })
+        // Check cache first
+        const cached = fresh ? null : getCached(domain)
+        let scrapedData
 
-        const scrapedData = await scrapeCompany(domain, async (msg) => {
-          const progressMap: Record<string, number> = {
-            'Fetching homepage...': 10,
-            'Scanning about page...': 20,
-            'Scanning careers page...': 30,
-          }
-          await sendEvent({
-            stage: 'scraping',
-            message: msg,
-            progress: progressMap[msg] || 25,
+        if (cached) {
+          await sendEvent({ stage: 'scraping', message: 'Using cached data...', progress: 35 })
+          scrapedData = cached
+        } else {
+          // Stage 1: Scraping
+          await sendEvent({ stage: 'scraping', message: 'Analyzing homepage...', progress: 10 })
+
+          scrapedData = await scrapeCompany(domain, async (msg) => {
+            const progressMap: Record<string, number> = {
+              'Fetching homepage...': 10,
+              'Scanning about page...': 20,
+              'Scanning careers page...': 30,
+            }
+            await sendEvent({
+              stage: 'scraping',
+              message: msg,
+              progress: progressMap[msg] || 25,
+            })
+          }, async (detail) => {
+            await stream.writeSSE({
+              data: JSON.stringify(detail),
+              event: 'scrape_detail',
+            })
           })
-        }, async (detail) => {
-          await stream.writeSSE({
-            data: JSON.stringify(detail),
-            event: 'scrape_detail',
-          })
-        })
+
+          setCache(domain, scrapedData)
+        }
 
         // Stage 2: Analyzing
         await sendEvent({ stage: 'analyzing', message: 'Processing company data...', progress: 40 })
@@ -159,7 +217,11 @@ app.post('/api/research/bulk', async (c) => {
     let domains: string[] = []
 
     if (body.domains && Array.isArray(body.domains)) {
-      domains = body.domains.map((d) => d.replace(/^https?:\/\//, '').replace(/\/.*$/, ''))
+      try {
+        domains = body.domains.map((d) => validateDomain(d))
+      } catch (err) {
+        return c.json({ error: err instanceof Error ? err.message : 'Invalid domain' }, 400)
+      }
     } else if (body.csv) {
       domains = parseCsvDomains(body.csv)
     }
@@ -210,7 +272,12 @@ app.post('/api/research/compare', async (c) => {
       return c.json({ error: 'Maximum 5 companies for comparison' }, 400)
     }
 
-    const domains = body.domains.map((d) => d.replace(/^https?:\/\//, '').replace(/\/.*$/, ''))
+    let domains: string[]
+    try {
+      domains = body.domains.map((d) => validateDomain(d))
+    } catch (err) {
+      return c.json({ error: err instanceof Error ? err.message : 'Invalid domain' }, 400)
+    }
 
     return streamSSE(c, async (stream) => {
       const sendProgress = async (message: string, progress: number) => {
@@ -228,7 +295,12 @@ app.post('/api/research/compare', async (c) => {
           const domain = domains[i]
           await sendProgress(`Researching ${domain} (${i + 1}/${total})...`, Math.round(((i) / (total + 1)) * 100))
 
-          const scrapedData = await scrapeCompany(domain)
+          let scrapedData = getCached(domain)
+          if (!scrapedData) {
+            scrapedData = await scrapeCompany(domain)
+            setCache(domain, scrapedData)
+          }
+
           const report = await analyzeCompany(
             domain,
             scrapedData,
@@ -477,7 +549,12 @@ app.post('/api/discover/lookalike', async (c) => {
       return c.json({ error: 'domain is required' }, 400)
     }
 
-    const domain = body.domain.replace(/^https?:\/\//, '').replace(/\/.*$/, '')
+    let domain: string
+    try {
+      domain = validateDomain(body.domain)
+    } catch (err) {
+      return c.json({ error: err instanceof Error ? err.message : 'Invalid domain' }, 400)
+    }
     const companies = await discoverLookalike(domain, undefined, body.geography)
 
     const result: DiscoverResults = {
@@ -501,7 +578,12 @@ app.post('/api/discover/lookalike/stream', async (c) => {
       return c.json({ error: 'domain is required' }, 400)
     }
 
-    const domain = body.domain.replace(/^https?:\/\//, '').replace(/\/.*$/, '')
+    let domain: string
+    try {
+      domain = validateDomain(body.domain)
+    } catch (err) {
+      return c.json({ error: err instanceof Error ? err.message : 'Invalid domain' }, 400)
+    }
 
     return streamSSE(c, async (stream) => {
       try {
@@ -642,6 +724,21 @@ app.post('/api/talent/search/stream', async (c) => {
   }
 })
 
-const port = 3001
-console.log(`ProspectPilot API running on http://localhost:${port}`)
+// In production, serve the built frontend
+if (process.env.NODE_ENV === 'production') {
+  app.use('/*', serveStatic({ root: './dist' }))
+
+  // SPA fallback - serve index.html for all non-API routes
+  app.get('*', (c) => {
+    const indexPath = path.join(process.cwd(), 'dist', 'index.html')
+    if (fs.existsSync(indexPath)) {
+      const html = fs.readFileSync(indexPath, 'utf-8')
+      return c.html(html)
+    }
+    return c.text('Not found', 404)
+  })
+}
+
+const port = Number(process.env.PORT) || 3001
+console.log(`ResearchAgent API running on http://localhost:${port}`)
 serve({ fetch: app.fetch, port })

@@ -14,11 +14,11 @@ function ComparisonMatrix({ report }: { report: ComparisonReport }) {
   const domains = companies.map((c) => c.company.domain)
 
   return (
-    <div className="overflow-x-auto">
+    <div className="relative overflow-x-auto scrollbar-hide -mx-2 px-2">
       <table className="w-full border-collapse">
         <thead>
           <tr>
-            <th className="text-left p-3 text-[10px] text-white/25 uppercase tracking-wider font-semibold border-b border-white/[0.06] min-w-[140px]">
+            <th className="text-left p-3 text-[10px] text-white/25 uppercase tracking-wider font-semibold border-b border-white/[0.06] min-w-[140px] md:static sticky left-0 z-10 bg-gray-950/95 backdrop-blur-sm">
               Dimension
             </th>
             {domains.map((domain) => {
@@ -50,7 +50,7 @@ function ComparisonMatrix({ report }: { report: ComparisonReport }) {
                 transition={{ duration: 0.3, delay: di * 0.05 }}
                 className="group hover:bg-white/[0.02] transition-colors"
               >
-                <td className="p-3 border-b border-white/[0.04]">
+                <td className="p-3 border-b border-white/[0.04] md:static sticky left-0 z-10 bg-gray-950/95 backdrop-blur-sm">
                   <span className="text-xs font-medium text-white/50">{dim.name}</span>
                 </td>
                 {domains.map((domain) => {
@@ -135,7 +135,7 @@ export function ComparisonResults({ report, onReset }: ComparisonResultsProps) {
       <motion.div
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
-        className="flex items-center justify-between mb-8"
+        className="flex items-center justify-between mb-8 flex-wrap gap-3"
       >
         <button
           onClick={onReset}
@@ -166,22 +166,22 @@ export function ComparisonResults({ report, onReset }: ComparisonResultsProps) {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
-        className="glass glow p-6 mb-8"
+        className="glass glow p-4 sm:p-6 mb-8"
       >
-        <div className="flex items-center gap-3 mb-4">
+        <div className="flex items-center gap-3 mb-4 flex-wrap">
           <div className="p-2 rounded-lg bg-brand-500/10 border border-brand-500/20">
             <Swords className="w-5 h-5 text-brand-400" />
           </div>
-          <div className="flex-1">
-            <h2 className="text-xl font-bold text-white/90">Company Comparison</h2>
+          <div className="flex-1 min-w-0">
+            <h2 className="text-lg sm:text-xl font-bold text-white/90">Company Comparison</h2>
             <p className="text-xs text-white/30">{report.companies.length} companies analyzed</p>
           </div>
           {report.comparison.overallWinner && (
-            <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-500/10 border border-amber-500/20">
+            <div className="flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl bg-amber-500/10 border border-amber-500/20">
               <Crown className="w-4 h-4 text-amber-400" />
               <div>
                 <div className="text-[10px] text-amber-300/50 uppercase tracking-wider font-semibold">Overall Winner</div>
-                <div className="text-sm font-bold text-amber-300">
+                <div className="text-sm font-bold text-amber-300 truncate max-w-[150px] sm:max-w-none">
                   {report.companies.find(c => c.company.domain === report.comparison.overallWinner)?.company.name || report.comparison.overallWinner}
                 </div>
               </div>
@@ -195,7 +195,7 @@ export function ComparisonResults({ report, onReset }: ComparisonResultsProps) {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, delay: 0.1 }}
-        className="glass p-6 mb-8"
+        className="glass p-4 sm:p-6 mb-8"
       >
         <div className="flex items-center gap-2.5 mb-5">
           <div className="p-2 rounded-lg bg-white/[0.04] border border-white/[0.06]">
@@ -208,13 +208,13 @@ export function ComparisonResults({ report, onReset }: ComparisonResultsProps) {
 
       {/* Summary & Recommendation */}
       {(report.comparison.summary || report.comparison.recommendation) && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-8">
           {report.comparison.summary && (
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.2 }}
-              className="glass p-6"
+              className="glass p-4 sm:p-6"
             >
               <h3 className="text-sm font-semibold text-white/70 mb-3">Summary</h3>
               <p className="text-sm text-white/45 leading-relaxed">{report.comparison.summary}</p>
@@ -225,7 +225,7 @@ export function ComparisonResults({ report, onReset }: ComparisonResultsProps) {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.25 }}
-              className="glass p-6 border-l-2 border-l-brand-500/40"
+              className="glass p-4 sm:p-6 border-l-2 border-l-brand-500/40"
             >
               <h3 className="text-sm font-semibold text-brand-300/80 mb-3">Recommendation</h3>
               <p className="text-sm text-white/45 leading-relaxed">{report.comparison.recommendation}</p>
@@ -248,7 +248,7 @@ export function ComparisonResults({ report, onReset }: ComparisonResultsProps) {
               const company = report.companies.find(c => c.company.domain === cs.domain)
               const isWinner = cs.domain === report.comparison.overallWinner
               return (
-                <div key={cs.domain} className={`glass p-5 ${isWinner ? 'border-amber-500/20 border' : ''}`}>
+                <div key={cs.domain} className={`glass p-4 sm:p-5 ${isWinner ? 'border-amber-500/20 border' : ''}`}>
                   <div className="flex items-center gap-2 mb-4">
                     <div className="w-8 h-8 rounded-lg bg-brand-500/10 border border-brand-500/20 flex items-center justify-center shrink-0">
                       <span className="text-[10px] font-bold text-brand-300">{(company?.company.name || cs.domain)[0].toUpperCase()}</span>

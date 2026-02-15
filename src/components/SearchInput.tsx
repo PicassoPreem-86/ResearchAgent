@@ -138,7 +138,7 @@ export function SearchInput({ onSearch, isLoading, onLoadExample }: SearchInputP
                 onClick={() => setSelectedTemplate(tmpl.value)}
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
-                className={`relative flex flex-col items-center gap-1.5 px-3 py-3.5 rounded-xl border text-center transition-all duration-200 ${
+                className={`relative flex flex-col items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-3 sm:py-3.5 rounded-xl border text-center transition-all duration-200 overflow-hidden ${
                   isSelected
                     ? 'bg-brand-500/15 border-brand-500/30 shadow-lg shadow-brand-500/10'
                     : 'bg-white/[0.02] border-white/[0.06] hover:bg-white/[0.05] hover:border-white/[0.1]'
@@ -149,12 +149,12 @@ export function SearchInput({ onSearch, isLoading, onLoadExample }: SearchInputP
                 }`}>
                   <Icon className={`w-4 h-4 ${isSelected ? 'text-brand-400' : 'text-white/30'}`} />
                 </div>
-                <span className={`text-xs font-semibold transition-colors duration-200 ${
+                <span className={`text-[11px] sm:text-xs font-semibold transition-colors duration-200 truncate w-full ${
                   isSelected ? 'text-brand-300' : 'text-white/50'
                 }`}>
                   {tmpl.label}
                 </span>
-                <span className={`text-[10px] leading-tight transition-colors duration-200 ${
+                <span className={`text-[10px] leading-tight transition-colors duration-200 truncate w-full ${
                   isSelected ? 'text-brand-300/60' : 'text-white/20'
                 }`}>
                   {tmpl.description}

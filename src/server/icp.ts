@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs'
+import { readFileSync, writeFileSync, renameSync, existsSync, mkdirSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { ICP } from '../types/prospect.js'
@@ -16,7 +16,9 @@ function ensureDataDir(): void {
 
 export function saveICP(icp: ICP): void {
   ensureDataDir()
-  writeFileSync(ICP_FILE, JSON.stringify(icp, null, 2), 'utf-8')
+  const tmp = ICP_FILE + '.tmp'
+  writeFileSync(tmp, JSON.stringify(icp, null, 2), 'utf-8')
+  renameSync(tmp, ICP_FILE)
 }
 
 export function loadICP(): ICP | null {

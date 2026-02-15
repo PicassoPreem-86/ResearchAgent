@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { motion } from 'framer-motion'
 import {
   Building2,
@@ -17,8 +17,6 @@ import {
   ShieldAlert,
   UserCircle,
   DollarSign,
-  Download,
-  Loader2,
   Lightbulb,
   Swords,
   FileText,
@@ -31,10 +29,16 @@ import { MarketPositionCard } from './MarketPositionCard'
 import { RiskAssessmentCard } from './RiskAssessment'
 import { KeyPeople } from './KeyPeople'
 import { FinancialSignalsCard } from './FinancialSignals'
+import { ExportMenu } from './ExportMenu'
+import { WatchButton } from './WatchButton'
+import { Toast } from './Toast'
 
 interface ResultsPanelProps {
   report: ProspectReport
   onReset: () => void
+  isWatching?: boolean
+  onWatch?: (domain: string) => Promise<void>
+  onUnwatch?: (domain: string) => Promise<void>
 }
 
 function SectionHeader({ icon: Icon, title, accent }: { icon: React.ElementType; title: string; accent?: string }) {
@@ -113,9 +117,10 @@ function ConfidenceBadge({ confidence }: { confidence: number }) {
   )
 }
 
-export function ResultsPanel({ report, onReset }: ResultsPanelProps) {
+export function ResultsPanel({ report, onReset, isWatching, onWatch, onUnwatch }: ResultsPanelProps) {
   const { company, executiveSummary, painPoints, jobInsights, email, emails, swot, marketPosition, risks, keyPeople, financialSignals, competitiveLandscape, strategicRecommendations, template } = report
   const [isExporting, setIsExporting] = useState(false)
+  const [toast, setToast] = useState<{ message: string; variant: 'success' | 'error' } | null>(null)
 
   const hasSwot = swot && (swot.strengths.length > 0 || swot.weaknesses.length > 0 || swot.opportunities.length > 0 || swot.threats.length > 0)
   const hasMarket = marketPosition && marketPosition.segment
@@ -125,6 +130,10 @@ export function ResultsPanel({ report, onReset }: ResultsPanelProps) {
   const hasCompetitors = competitiveLandscape && competitiveLandscape.competitors && competitiveLandscape.competitors.length > 0
   const hasRecommendations = strategicRecommendations && strategicRecommendations.length > 0
   const isSalesTemplate = template === 'sales-research'
+
+  const showToast = useCallback((message: string, variant: 'success' | 'error' = 'success') => {
+    setToast({ message, variant })
+  }, [])
 
   const handleExportPdf = async () => {
     setIsExporting(true)
@@ -144,8 +153,9 @@ export function ResultsPanel({ report, onReset }: ResultsPanelProps) {
       a.click()
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
+      showToast('PDF downloaded')
     } catch {
-      // PDF export endpoint may not be available yet
+      showToast('PDF export failed', 'error')
     } finally {
       setIsExporting(false)
     }
@@ -171,18 +181,22 @@ export function ResultsPanel({ report, onReset }: ResultsPanelProps) {
           <ArrowLeft className="w-4 h-4" />
           Research another
         </button>
-        <div className="flex items-center gap-3">
-          <motion.button
-            onClick={handleExportPdf}
-            disabled={isExporting}
-            whileHover={{ scale: 1.03 }}
-            whileTap={{ scale: 0.97 }}
-            className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white/[0.06] border border-white/[0.08] text-xs font-medium text-white/50 hover:text-white/70 hover:bg-white/[0.1] transition-all disabled:opacity-40"
-          >
-            {isExporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
-            <span>Export PDF</span>
-          </motion.button>
-          <div className="text-xs text-white/20 font-mono">
+        <div className="flex items-center gap-2">
+          {onWatch && onUnwatch && (
+            <WatchButton
+              domain={company.domain}
+              isWatching={isWatching ?? false}
+              onWatch={async (d) => onWatch(d)}
+              onUnwatch={async (d) => onUnwatch(d)}
+            />
+          )}
+          <ExportMenu
+            report={report}
+            onExportPdf={handleExportPdf}
+            isExporting={isExporting}
+            onToast={showToast}
+          />
+          <div className="text-xs text-white/20 font-mono hidden sm:block">
             {new Date(report.researchedAt).toLocaleString()}
           </div>
         </div>
@@ -504,9 +518,16 @@ export function ResultsPanel({ report, onReset }: ResultsPanelProps) {
               <p className="text-xs text-white/30">AI-crafted based on research findings</p>
             </div>
           </div>
-          <EmailPreview email={email} emails={emails} recipientDomain={company.domain} />
+          <EmailPreview email={email} emails={emails} recipientDomain={company.domain} onToast={showToast} />
         </motion.div>
       )}
+
+      <Toast
+        message={toast?.message || ''}
+        variant={toast?.variant}
+        visible={!!toast}
+        onDismiss={() => setToast(null)}
+      />
     </motion.div>
   )
 }

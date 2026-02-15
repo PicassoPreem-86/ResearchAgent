@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs'
+import { readFileSync, writeFileSync, renameSync, existsSync, mkdirSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { ProspectReport } from '../types/prospect.js'
@@ -28,7 +28,9 @@ function readHistory(): ProspectReport[] {
 
 function writeHistory(reports: ProspectReport[]): void {
   ensureDataDir()
-  writeFileSync(HISTORY_FILE, JSON.stringify(reports, null, 2), 'utf-8')
+  const tmp = HISTORY_FILE + '.tmp'
+  writeFileSync(tmp, JSON.stringify(reports, null, 2), 'utf-8')
+  renameSync(tmp, HISTORY_FILE)
 }
 
 export function saveReport(report: ProspectReport): void {
