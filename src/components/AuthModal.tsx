@@ -17,6 +17,7 @@ export function AuthModal({ onClose, onSignIn, onSignUp, onGoogleSignIn, onMagic
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
+  const [successMessage, setSuccessMessage] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [magicLinkSent, setMagicLinkSent] = useState(false)
   const [showMagicLink, setShowMagicLink] = useState(false)
@@ -25,6 +26,7 @@ export function AuthModal({ onClose, onSignIn, onSignUp, onGoogleSignIn, onMagic
     setEmail('')
     setPassword('')
     setError('')
+    setSuccessMessage('')
     setMagicLinkSent(false)
     setShowMagicLink(false)
   }
@@ -82,7 +84,7 @@ export function AuthModal({ onClose, onSignIn, onSignUp, onGoogleSignIn, onMagic
         setError('')
         setTab('signin')
         setPassword('')
-        setError('Account created! Check your email to confirm, then sign in.')
+        setSuccessMessage('Account created! Check your email to confirm, then sign in.')
       } else {
         onClose()
       }
@@ -248,6 +250,21 @@ export function AuthModal({ onClose, onSignIn, onSignUp, onGoogleSignIn, onMagic
                     />
                   </motion.div>
                 )}
+
+                {/* Success */}
+                <AnimatePresence>
+                  {successMessage && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="flex items-start gap-2 px-3 py-2.5 rounded-xl bg-emerald-500/8 border border-emerald-500/15"
+                    >
+                      <AlertCircle className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
+                      <span className="text-xs text-emerald-300/80">{successMessage}</span>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
 
                 {/* Error */}
                 <AnimatePresence>

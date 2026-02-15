@@ -1,24 +1,28 @@
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { FolderPlus, Folder, Loader2, Check, X } from 'lucide-react'
+import { FolderPlus, Folder, Loader2, Check, X, Users } from 'lucide-react'
 import type { Workspace } from '@/hooks/useWorkspaces'
 
 interface WorkspaceSelectorProps {
   workspaces: Workspace[]
   isLoading: boolean
   activeWorkspaceId: string | null
+  memberCounts?: Record<string, number>
   onSelect: (id: string | null) => void
   onCreate: (name: string) => Promise<void>
   onDelete: (id: string) => Promise<void>
+  onOpenCollab?: (workspaceId: string) => void
 }
 
 export function WorkspaceSelector({
   workspaces,
   isLoading: _isLoading,
   activeWorkspaceId,
+  memberCounts,
   onSelect,
   onCreate,
   onDelete,
+  onOpenCollab,
 }: WorkspaceSelectorProps) {
   const [isCreating, setIsCreating] = useState(false)
   const [newName, setNewName] = useState('')
@@ -78,7 +82,25 @@ export function WorkspaceSelector({
               {ws.report_count !== undefined && ws.report_count > 0 && (
                 <span className="text-[8px] text-white/15">{ws.report_count}</span>
               )}
+              {memberCounts && memberCounts[ws.id] > 0 && (
+                <span className="flex items-center gap-0.5 text-[8px] text-white/15">
+                  <Users className="w-2 h-2" />
+                  {memberCounts[ws.id]}
+                </span>
+              )}
             </button>
+            {onOpenCollab && activeWorkspaceId === ws.id && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onOpenCollab(ws.id)
+                }}
+                className="ml-0.5 p-1 rounded-lg text-white/15 hover:text-brand-300 hover:bg-brand-500/10 transition-all"
+                title="Collaboration"
+              >
+                <Users className="w-2.5 h-2.5" />
+              </button>
+            )}
             <button
               onClick={(e) => {
                 e.stopPropagation()

@@ -1,41 +1,11 @@
 import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Search, ChevronDown, User, Building2, Briefcase, ArrowRight, Globe, Package, FileText, TrendingUp, Swords, Handshake, Mail, Eye } from 'lucide-react'
+import { Search, ChevronDown, User, Building2, Briefcase, ArrowRight, Globe, Package, FileText } from 'lucide-react'
 import { OnboardingHint } from '@/components/OnboardingHint'
 import { useOnboarding } from '@/hooks/useOnboarding'
+import { TemplateSelector } from '@/components/search/TemplateSelector'
+import { SearchExamples, EXAMPLE_DOMAINS } from '@/components/search/SearchExamples'
 import type { EmailTone, SellerContext, ReportTemplate } from '@/types/prospect'
-
-const EXAMPLE_DOMAINS = [
-  'stripe.com',
-  'notion.so',
-  'linear.app',
-  'vercel.com',
-  'figma.com',
-  'datadog.com',
-  'airtable.com',
-]
-
-const TONE_OPTIONS: { value: EmailTone; label: string }[] = [
-  { value: 'casual', label: 'Casual' },
-  { value: 'formal', label: 'Formal' },
-  { value: 'provocative', label: 'Provocative' },
-  { value: 'consultative', label: 'Consultative' },
-]
-
-interface TemplateOption {
-  value: ReportTemplate
-  label: string
-  description: string
-  icon: React.ElementType
-}
-
-const TEMPLATES: TemplateOption[] = [
-  { value: 'general', label: 'General Research', description: 'Balanced overview', icon: Search },
-  { value: 'investor-dd', label: 'Investor DD', description: 'Due diligence brief', icon: TrendingUp },
-  { value: 'competitive-analysis', label: 'Competitive Analysis', description: 'Market positioning', icon: Swords },
-  { value: 'partnership-eval', label: 'Partnership Eval', description: 'Fit & synergy analysis', icon: Handshake },
-  { value: 'sales-research', label: 'Sales Research', description: 'Pain points & outreach', icon: Mail },
-]
 
 interface SearchInputProps {
   onSearch: (
@@ -106,71 +76,19 @@ export function SearchInput({ onSearch, isLoading, onLoadExample }: SearchInputP
         <p className="text-base text-white/40 max-w-md mx-auto leading-relaxed">
           AI-powered company intelligence. Pick a lens, enter a domain, get a deep research report.
         </p>
-        {onLoadExample && (
-          <motion.button
-            type="button"
-            onClick={onLoadExample}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 1 }}
-            className="inline-flex items-center gap-1.5 mt-4 text-xs text-brand-400/60 hover:text-brand-400 transition-colors"
-          >
-            <Eye className="w-3.5 h-3.5" />
-            See an example report
-          </motion.button>
-        )}
+        <SearchExamples onLoadExample={onLoadExample} />
       </div>
 
-      {/* Template selector */}
-      <div className="mb-6">
-        <div className="text-[10px] text-white/25 uppercase tracking-wider font-semibold mb-3 text-center">Research Lens</div>
-        <OnboardingHint visible={!hasSeenLensHint} onDismiss={dismissLensHint} position="above">
-          Choose what angle matters most — this shapes the entire report
-        </OnboardingHint>
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-          {TEMPLATES.map((tmpl) => {
-            const Icon = tmpl.icon
-            const isSelected = selectedTemplate === tmpl.value
-            return (
-              <motion.button
-                key={tmpl.value}
-                type="button"
-                onClick={() => setSelectedTemplate(tmpl.value)}
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                className={`relative flex flex-col items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-3 sm:py-3.5 rounded-xl border text-center transition-all duration-200 overflow-hidden ${
-                  isSelected
-                    ? 'bg-brand-500/15 border-brand-500/30 shadow-lg shadow-brand-500/10'
-                    : 'bg-white/[0.02] border-white/[0.06] hover:bg-white/[0.05] hover:border-white/[0.1]'
-                }`}
-              >
-                <div className={`p-2 rounded-lg transition-colors duration-200 ${
-                  isSelected ? 'bg-brand-500/20' : 'bg-white/[0.04]'
-                }`}>
-                  <Icon className={`w-4 h-4 ${isSelected ? 'text-brand-400' : 'text-white/30'}`} />
-                </div>
-                <span className={`text-[11px] sm:text-xs font-semibold transition-colors duration-200 truncate w-full ${
-                  isSelected ? 'text-brand-300' : 'text-white/50'
-                }`}>
-                  {tmpl.label}
-                </span>
-                <span className={`text-[10px] leading-tight transition-colors duration-200 truncate w-full ${
-                  isSelected ? 'text-brand-300/60' : 'text-white/20'
-                }`}>
-                  {tmpl.description}
-                </span>
-                {isSelected && (
-                  <motion.div
-                    layoutId="template-indicator"
-                    className="absolute -bottom-px left-3 right-3 h-0.5 bg-brand-400 rounded-full"
-                    transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-                  />
-                )}
-              </motion.button>
-            )
-          })}
-        </div>
-      </div>
+      <TemplateSelector
+        selectedTemplate={selectedTemplate}
+        onSelectTemplate={setSelectedTemplate}
+        selectedTone={selectedTone}
+        onSelectTone={setSelectedTone}
+        hasSeenLensHint={hasSeenLensHint}
+        hasSeenToneHint={hasSeenToneHint}
+        dismissLensHint={dismissLensHint}
+        dismissToneHint={dismissToneHint}
+      />
 
       <form onSubmit={handleSubmit}>
         <div className="relative group">
@@ -203,30 +121,6 @@ export function SearchInput({ onSearch, isLoading, onLoadExample }: SearchInputP
               </motion.button>
             </div>
           </div>
-        </div>
-
-        {/* Tone selector */}
-        <OnboardingHint visible={!hasSeenToneHint} onDismiss={dismissToneHint}>
-          This controls the tone of outreach emails in your report
-        </OnboardingHint>
-        <div className="flex items-center justify-center gap-2 mt-5">
-          <span className="text-[10px] text-white/25 uppercase tracking-wider font-semibold mr-1">Tone</span>
-          {TONE_OPTIONS.map((opt) => (
-            <motion.button
-              key={opt.value}
-              type="button"
-              onClick={() => setSelectedTone(opt.value)}
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${
-                selectedTone === opt.value
-                  ? 'bg-brand-500/20 border border-brand-500/30 text-brand-300'
-                  : 'bg-white/[0.03] border border-white/[0.06] text-white/30 hover:text-white/50 hover:bg-white/[0.06]'
-              }`}
-            >
-              {opt.label}
-            </motion.button>
-          ))}
         </div>
 
         <div className="flex flex-col items-center">
@@ -287,7 +181,6 @@ export function SearchInput({ onSearch, isLoading, onLoadExample }: SearchInputP
                 </div>
               </div>
 
-              {/* Seller context */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
                 <div className="glass p-3 flex items-center gap-2.5">
                   <Package className="w-4 h-4 text-white/20 shrink-0" />

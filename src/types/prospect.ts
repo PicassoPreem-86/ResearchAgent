@@ -1,5 +1,35 @@
 export type EmailTone = 'casual' | 'formal' | 'provocative' | 'consultative'
 
+export type ClaimConfidence = 'high' | 'medium' | 'low' | 'inferred'
+
+export interface SourcedClaim {
+  claim: string
+  source: string
+  extractedAt: string
+  confidence: ClaimConfidence
+}
+
+export interface DataFreshness {
+  oldestSource: string
+  newestSource: string
+  sources: Array<{
+    url: string
+    fetchedAt: string
+    category: string
+    charCount: number
+  }>
+  totalPagesFetched: number
+  totalPagesSuccessful: number
+}
+
+export interface SectionConfidence {
+  section: string
+  score: number
+  reasoning: string
+  claimCount: number
+  sourcedClaimCount: number
+}
+
 export type ReportTemplate = 'investor-dd' | 'competitive-analysis' | 'partnership-eval' | 'sales-research' | 'general'
 
 export interface SwotAnalysis {
@@ -128,6 +158,9 @@ export interface ProspectReport {
   strategicRecommendations: string[]
   template: ReportTemplate
   researchedAt: string
+  sourceMap: Record<string, SourcedClaim[]>
+  dataFreshness: DataFreshness
+  sectionConfidence: SectionConfidence[]
 }
 
 export interface GeoTarget {

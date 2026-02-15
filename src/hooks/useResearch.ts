@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import type { ProspectReport, ResearchProgress, ResearchStage, EmailTone, SellerContext, ReportTemplate } from '@/types/prospect'
 
 export interface ScrapeDetail {
@@ -35,14 +35,25 @@ export function useResearch(): UseResearchReturn {
   const [error, setError] = useState<string | null>(null)
   const [scrapeLog, setScrapeLog] = useState<ScrapeDetail[]>([])
   const abortRef = useRef<AbortController | null>(null)
+  const readerRef = useRef<ReadableStreamDefaultReader | null>(null)
+  const isMountedRef = useRef(true)
+
+  useEffect(() => {
+    isMountedRef.current = true
+    return () => {
+      isMountedRef.current = false
+      abortRef.current?.abort()
+      readerRef.current?.cancel().catch(() => {})
+    }
+  }, [])
 
   const isResearching = !['idle', 'complete', 'error'].includes(progress.stage)
 
   const reset = useCallback(() => {
-    if (abortRef.current) {
-      abortRef.current.abort()
-      abortRef.current = null
-    }
+    abortRef.current?.abort()
+    abortRef.current = null
+    readerRef.current?.cancel().catch(() => {})
+    readerRef.current = null
     setProgress(INITIAL_PROGRESS)
     setReport(null)
     setError(null)
@@ -50,6 +61,10 @@ export function useResearch(): UseResearchReturn {
   }, [])
 
   const startResearch = useCallback((domain: string, senderContext?: SenderContext, tone?: EmailTone, sellerContext?: SellerContext, template?: ReportTemplate) => {
+    // Cancel previous request
+    abortRef.current?.abort()
+    readerRef.current?.cancel().catch(() => {})
+
     setError(null)
     setReport(null)
     setScrapeLog([])
@@ -91,19 +106,21 @@ export function useResearch(): UseResearchReturn {
         if (!reader) {
           throw new Error('No response stream')
         }
+        readerRef.current = reader
 
         const decoder = new TextDecoder()
         let buffer = ''
 
         const read = (): Promise<void> => {
           return reader.read().then(({ done, value }) => {
-            if (done) return
+            if (done || !isMountedRef.current) return
 
             buffer += decoder.decode(value, { stream: true })
             const lines = buffer.split('\n')
             buffer = lines.pop() || ''
 
             for (const line of lines) {
+              if (!isMountedRef.current) break
               if (line.startsWith('data: ')) {
                 try {
                   const data = JSON.parse(line.slice(6))
@@ -111,7 +128,6 @@ export function useResearch(): UseResearchReturn {
                   // Handle scrape_detail events
                   if (data.url && data.status && data.pageType) {
                     setScrapeLog((prev) => {
-                      // Update existing entry or add new
                       const existing = prev.findIndex((e) => e.url === data.url && e.pageType === data.pageType)
                       if (existing >= 0) {
                         const next = [...prev]
@@ -154,10 +170,13 @@ export function useResearch(): UseResearchReturn {
           })
         }
 
-        return read()
+        return read().finally(() => {
+          readerRef.current = null
+        })
       })
       .catch((err) => {
-        if (err.name === 'AbortError') return
+        if (err instanceof Error && err.name === 'AbortError') return
+        if (!isMountedRef.current) return
         setError(err.message || 'Something went wrong')
         setProgress({ stage: 'error', message: err.message, progress: 0 })
       })

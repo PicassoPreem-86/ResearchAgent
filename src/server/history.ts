@@ -45,8 +45,14 @@ export function saveReport(report: ProspectReport): void {
   writeHistory(history)
 }
 
-export function getHistory(): ProspectReport[] {
-  return readHistory()
+export function getHistory(limit = 50, offset = 0): { reports: ProspectReport[]; total: number } {
+  const all = readHistory()
+  const clamped = Math.min(Math.max(limit, 1), 200)
+  const start = Math.max(offset, 0)
+  return {
+    reports: all.slice(start, start + clamped),
+    total: all.length,
+  }
 }
 
 export function deleteReport(domain: string): boolean {

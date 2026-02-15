@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import type { ProspectReport } from '@/types/prospect'
 
 export type DomainStatus = 'pending' | 'processing' | 'complete' | 'error'
@@ -40,12 +40,23 @@ export function useBulkResearch(): UseBulkResearchReturn {
   const [isProcessing, setIsProcessing] = useState(false)
   const [isComplete, setIsComplete] = useState(false)
   const abortRef = useRef<AbortController | null>(null)
+  const readerRef = useRef<ReadableStreamDefaultReader | null>(null)
+  const isMountedRef = useRef(true)
+
+  useEffect(() => {
+    isMountedRef.current = true
+    return () => {
+      isMountedRef.current = false
+      abortRef.current?.abort()
+      readerRef.current?.cancel().catch(() => {})
+    }
+  }, [])
 
   const reset = useCallback(() => {
-    if (abortRef.current) {
-      abortRef.current.abort()
-      abortRef.current = null
-    }
+    abortRef.current?.abort()
+    abortRef.current = null
+    readerRef.current?.cancel().catch(() => {})
+    readerRef.current = null
     setDomainResults([])
     setCurrentIndex(-1)
     setTotal(0)
@@ -55,13 +66,17 @@ export function useBulkResearch(): UseBulkResearchReturn {
   }, [])
 
   const startBulk = useCallback((domains: string[], senderContext?: { senderName?: string; senderCompany?: string; senderRole?: string }) => {
-    reset()
+    // Cancel previous request
+    abortRef.current?.abort()
+    readerRef.current?.cancel().catch(() => {})
 
     const initial: DomainResult[] = domains.map((d) => ({ domain: d, status: 'pending' }))
     setDomainResults(initial)
     setTotal(domains.length)
-    setIsProcessing(true)
+    setCurrentIndex(-1)
     setMessage(`Starting bulk research for ${domains.length} domains...`)
+    setIsProcessing(true)
+    setIsComplete(false)
 
     const abortController = new AbortController()
     abortRef.current = abortController
@@ -87,19 +102,21 @@ export function useBulkResearch(): UseBulkResearchReturn {
 
         const reader = response.body?.getReader()
         if (!reader) throw new Error('No response stream')
+        readerRef.current = reader
 
         const decoder = new TextDecoder()
         let buffer = ''
 
         const read = (): Promise<void> => {
           return reader.read().then(({ done, value }) => {
-            if (done) return
+            if (done || !isMountedRef.current) return
 
             buffer += decoder.decode(value, { stream: true })
             const lines = buffer.split('\n')
             buffer = lines.pop() || ''
 
             for (const line of lines) {
+              if (!isMountedRef.current) break
               if (line.startsWith('data: ')) {
                 try {
                   const data = JSON.parse(line.slice(6)) as BulkProgress
@@ -144,14 +161,17 @@ export function useBulkResearch(): UseBulkResearchReturn {
           })
         }
 
-        return read()
+        return read().finally(() => {
+          readerRef.current = null
+        })
       })
       .catch((err) => {
-        if (err.name === 'AbortError') return
+        if (err instanceof Error && err.name === 'AbortError') return
+        if (!isMountedRef.current) return
         setMessage(err.message || 'Bulk research failed')
         setIsProcessing(false)
       })
-  }, [reset])
+  }, [])
 
   const exportCsv = useCallback(() => {
     const results = domainResults.map((dr) => ({

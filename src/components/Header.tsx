@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { Brain, Clock, LogOut, User, ChevronDown, Eye } from 'lucide-react'
+import { SignalsFeed } from '@/components/SignalsFeed'
+import type { Signal } from '@/hooks/useSignals'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Link } from 'react-router-dom'
 import { UsageBadge } from '@/components/UsageBadge'
@@ -31,6 +33,13 @@ interface HeaderProps {
   usageLabel?: string
   watchCount?: number
   onToggleWatchList?: () => void
+  signals?: Signal[]
+  signalUnreadCount?: number
+  signalsLoading?: boolean
+  onSignalMarkRead?: (id: string) => void
+  onSignalDismissAll?: () => void
+  onSignalRefresh?: () => void
+  onSignalDomainClick?: (domain: string) => void
 }
 
 function getInitials(user: SupabaseUser): string {
@@ -152,6 +161,13 @@ export function Header({
   usageLabel,
   watchCount,
   onToggleWatchList,
+  signals,
+  signalUnreadCount,
+  signalsLoading,
+  onSignalMarkRead,
+  onSignalDismissAll,
+  onSignalRefresh,
+  onSignalDomainClick,
 }: HeaderProps) {
   return (
     <motion.header
@@ -176,6 +192,19 @@ export function Header({
             <div className="hidden sm:block">
               <UsageBadge usage={usage} quotas={quotas} label={usageLabel} />
             </div>
+          )}
+
+          {/* Signals feed */}
+          {signals && onSignalMarkRead && onSignalDismissAll && onSignalRefresh && (
+            <SignalsFeed
+              signals={signals}
+              unreadCount={signalUnreadCount ?? 0}
+              isLoading={signalsLoading ?? false}
+              onMarkRead={onSignalMarkRead}
+              onDismissAll={onSignalDismissAll}
+              onRefresh={onSignalRefresh}
+              onDomainClick={onSignalDomainClick}
+            />
           )}
 
           {/* Watch list button */}

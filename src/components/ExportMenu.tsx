@@ -4,6 +4,7 @@ import {
   Download,
   FileJson,
   FileText,
+  FileSpreadsheet,
   ClipboardCopy,
   Copy,
   ChevronDown,
@@ -13,6 +14,7 @@ import type { ProspectReport } from '@/types/prospect'
 import {
   reportToJson,
   reportToMarkdown,
+  reportToCSV,
   reportToExecutiveSummary,
   copyToClipboard,
   downloadFile,
@@ -56,6 +58,13 @@ export function ExportMenu({ report, onExportPdf, isExporting, onToast }: Export
     close()
   }
 
+  const handleExportCSV = () => {
+    const csv = reportToCSV(report)
+    downloadFile(csv, `${report.company.domain}-research.csv`, 'text/csv')
+    onToast('CSV downloaded')
+    close()
+  }
+
   const handleCopyFull = async () => {
     try {
       const md = reportToMarkdown(report)
@@ -82,7 +91,8 @@ export function ExportMenu({ report, onExportPdf, isExporting, onToast }: Export
     { label: 'Export PDF', icon: Download, action: () => { onExportPdf(); close() }, loading: isExporting },
     { label: 'Export JSON', icon: FileJson, action: handleExportJson },
     { label: 'Export Markdown', icon: FileText, action: handleExportMarkdown },
-    { label: 'Copy to Clipboard', icon: ClipboardCopy, action: handleCopyFull },
+    { label: 'Export CSV', icon: FileSpreadsheet, action: handleExportCSV },
+    { label: 'Copy as Markdown', icon: ClipboardCopy, action: handleCopyFull },
     { label: 'Copy Executive Summary', icon: Copy, action: handleCopySummary },
   ]
 

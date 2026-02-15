@@ -19,7 +19,7 @@ describe('createRateLimiter', () => {
     const app = createTestApp(5, 60_000)
     for (let i = 0; i < 5; i++) {
       const res = await app.request('/test', {
-        headers: { 'x-forwarded-for': '10.0.0.1' },
+        headers: { 'cf-connecting-ip': '10.0.0.1' },
       })
       expect(res.status).toBe(200)
     }
@@ -31,14 +31,14 @@ describe('createRateLimiter', () => {
     // Use up the limit
     for (let i = 0; i < 3; i++) {
       const res = await app.request('/test', {
-        headers: { 'x-forwarded-for': '10.0.0.2' },
+        headers: { 'cf-connecting-ip': '10.0.0.2' },
       })
       expect(res.status).toBe(200)
     }
 
     // Next request should be rate limited
     const res = await app.request('/test', {
-      headers: { 'x-forwarded-for': '10.0.0.2' },
+      headers: { 'cf-connecting-ip': '10.0.0.2' },
     })
     expect(res.status).toBe(429)
     const body = await res.json()
@@ -51,19 +51,19 @@ describe('createRateLimiter', () => {
     // IP A uses up limit
     for (let i = 0; i < 2; i++) {
       await app.request('/test', {
-        headers: { 'x-forwarded-for': '10.0.0.3' },
+        headers: { 'cf-connecting-ip': '10.0.0.3' },
       })
     }
 
     // IP A is rate limited
     const resA = await app.request('/test', {
-      headers: { 'x-forwarded-for': '10.0.0.3' },
+      headers: { 'cf-connecting-ip': '10.0.0.3' },
     })
     expect(resA.status).toBe(429)
 
     // IP B is still fine
     const resB = await app.request('/test', {
-      headers: { 'x-forwarded-for': '10.0.0.4' },
+      headers: { 'cf-connecting-ip': '10.0.0.4' },
     })
     expect(resB.status).toBe(200)
   })
@@ -76,13 +76,13 @@ describe('createRateLimiter', () => {
     // Use up limit
     for (let i = 0; i < 2; i++) {
       await app.request('/test', {
-        headers: { 'x-forwarded-for': '10.0.0.5' },
+        headers: { 'cf-connecting-ip': '10.0.0.5' },
       })
     }
 
     // Rate limited
     const blockedRes = await app.request('/test', {
-      headers: { 'x-forwarded-for': '10.0.0.5' },
+      headers: { 'cf-connecting-ip': '10.0.0.5' },
     })
     expect(blockedRes.status).toBe(429)
 
@@ -91,14 +91,14 @@ describe('createRateLimiter', () => {
 
     // Should be allowed again
     const newRes = await app.request('/test', {
-      headers: { 'x-forwarded-for': '10.0.0.5' },
+      headers: { 'cf-connecting-ip': '10.0.0.5' },
     })
     expect(newRes.status).toBe(200)
 
     vi.useRealTimers()
   })
 
-  it('uses "unknown" IP when no x-forwarded-for header', async () => {
+  it('uses "unknown" IP when no identifying header', async () => {
     const app = createTestApp(2, 60_000)
 
     for (let i = 0; i < 2; i++) {

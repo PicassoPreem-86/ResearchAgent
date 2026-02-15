@@ -288,12 +288,12 @@ describe('POST /api/research/bulk', () => {
     expect(res.status).toBe(400)
   })
 
-  it('returns 400 when more than 100 domains', async () => {
-    const domains = Array.from({ length: 101 }, (_, i) => `d${i}.com`)
+  it('returns 400 when more than 50 domains', async () => {
+    const domains = Array.from({ length: 51 }, (_, i) => `d${i}.com`)
     const res = await req('POST', '/api/research/bulk', { domains })
     expect(res.status).toBe(400)
     const body = await res.json()
-    expect(body.error).toContain('100')
+    expect(body.error).toContain('50')
   })
 
   it('streams bulk progress for valid domains', async () => {

@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import type { TalentReport, ResearchStage, GeoTarget } from '@/types/prospect'
 
 interface TalentProgress {
@@ -27,20 +27,35 @@ export function useTalent(): UseTalentReturn {
   const [talentReport, setTalentReport] = useState<TalentReport | null>(null)
   const [error, setError] = useState<string | null>(null)
   const abortRef = useRef<AbortController | null>(null)
+  const readerRef = useRef<ReadableStreamDefaultReader | null>(null)
+  const isMountedRef = useRef(true)
+
+  useEffect(() => {
+    isMountedRef.current = true
+    return () => {
+      isMountedRef.current = false
+      abortRef.current?.abort()
+      readerRef.current?.cancel().catch(() => {})
+    }
+  }, [])
 
   const isSearching = !['idle', 'complete', 'error'].includes(progress.stage)
 
   const reset = useCallback(() => {
-    if (abortRef.current) {
-      abortRef.current.abort()
-      abortRef.current = null
-    }
+    abortRef.current?.abort()
+    abortRef.current = null
+    readerRef.current?.cancel().catch(() => {})
+    readerRef.current = null
     setProgress(INITIAL_PROGRESS)
     setTalentReport(null)
     setError(null)
   }, [])
 
   const searchTalent = useCallback((targetRole: string, targetSkills: string[], location?: GeoTarget, seniority?: string) => {
+    // Cancel previous request
+    abortRef.current?.abort()
+    readerRef.current?.cancel().catch(() => {})
+
     setError(null)
     setTalentReport(null)
     setProgress({ stage: 'scraping', message: 'Starting candidate search...', progress: 5 })
@@ -61,19 +76,21 @@ export function useTalent(): UseTalentReturn {
 
         const reader = response.body?.getReader()
         if (!reader) throw new Error('No response stream')
+        readerRef.current = reader
 
         const decoder = new TextDecoder()
         let buffer = ''
 
         const read = (): Promise<void> => {
           return reader.read().then(({ done, value }) => {
-            if (done) return
+            if (done || !isMountedRef.current) return
 
             buffer += decoder.decode(value, { stream: true })
             const lines = buffer.split('\n')
             buffer = lines.pop() || ''
 
             for (const line of lines) {
+              if (!isMountedRef.current) break
               if (line.startsWith('data: ')) {
                 try {
                   const data = JSON.parse(line.slice(6))
@@ -101,10 +118,13 @@ export function useTalent(): UseTalentReturn {
           })
         }
 
-        return read()
+        return read().finally(() => {
+          readerRef.current = null
+        })
       })
       .catch((err) => {
-        if (err.name === 'AbortError') return
+        if (err instanceof Error && err.name === 'AbortError') return
+        if (!isMountedRef.current) return
         setError(err.message || 'Something went wrong')
         setProgress({ stage: 'error', message: err.message, progress: 0 })
       })

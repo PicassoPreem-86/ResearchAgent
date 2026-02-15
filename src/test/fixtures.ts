@@ -34,6 +34,16 @@ export const SAMPLE_SCRAPED_DATA: ScrapedCompanyData = {
   teamMembers: [{ name: 'Patrick Collison', role: 'CEO' }],
   structuredData: [],
   rawTexts: 'Stripe is a financial infrastructure platform for businesses.',
+  pricingData: null,
+  teamDetailed: [],
+  pagesScraped: 3,
+  sitemapDiscovered: false,
+  categories: {},
+  pageMeta: [
+    { url: 'https://stripe.com', fetchedAt: '2025-01-01T00:00:00.000Z', category: 'homepage', charCount: 170, success: true },
+    { url: 'https://stripe.com/about', fetchedAt: '2025-01-01T00:00:01.000Z', category: 'about', charCount: 70, success: true },
+    { url: 'https://stripe.com/careers', fetchedAt: '2025-01-01T00:00:02.000Z', category: 'careers', charCount: 60, success: true },
+  ],
 }
 
 export const SAMPLE_REPORT: ProspectReport = {
@@ -113,6 +123,45 @@ export const SAMPLE_REPORT: ProspectReport = {
   strategicRecommendations: ['Expand embedded finance offerings'],
   template: 'general',
   researchedAt: '2025-01-01T00:00:00.000Z',
+  sourceMap: {
+    painPoints: [
+      { claim: 'Multiple SRE job openings', source: 'careers', extractedAt: '2025-01-01T00:00:00.000Z', confidence: 'high' },
+    ],
+    financialSignals: [
+      { claim: 'Raised Series I at $50B valuation', source: 'news', extractedAt: '2025-01-01T00:00:00.000Z', confidence: 'high' },
+    ],
+    competitiveLandscape: [
+      { claim: 'Adyen competes in enterprise payments', source: 'inferred', extractedAt: '2025-01-01T00:00:00.000Z', confidence: 'medium' },
+    ],
+    marketPosition: [
+      { claim: 'Developer-first API positioning', source: 'homepage', extractedAt: '2025-01-01T00:00:00.000Z', confidence: 'high' },
+    ],
+    risks: [
+      { claim: 'Regulatory compliance hiring', source: 'careers', extractedAt: '2025-01-01T00:00:00.000Z', confidence: 'medium' },
+    ],
+    keyPeople: [
+      { claim: 'Patrick Collison is CEO', source: 'about', extractedAt: '2025-01-01T00:00:00.000Z', confidence: 'high' },
+    ],
+  },
+  dataFreshness: {
+    oldestSource: '2025-01-01T00:00:00.000Z',
+    newestSource: '2025-01-01T00:00:02.000Z',
+    sources: [
+      { url: 'https://stripe.com', fetchedAt: '2025-01-01T00:00:00.000Z', category: 'homepage', charCount: 170 },
+      { url: 'https://stripe.com/about', fetchedAt: '2025-01-01T00:00:01.000Z', category: 'about', charCount: 70 },
+      { url: 'https://stripe.com/careers', fetchedAt: '2025-01-01T00:00:02.000Z', category: 'careers', charCount: 60 },
+    ],
+    totalPagesFetched: 3,
+    totalPagesSuccessful: 3,
+  },
+  sectionConfidence: [
+    { section: 'painPoints', score: 100, reasoning: '1/1 pain points backed by direct evidence', claimCount: 1, sourcedClaimCount: 1 },
+    { section: 'financialSignals', score: 100, reasoning: '1/1 financial signals backed by direct evidence', claimCount: 1, sourcedClaimCount: 1 },
+    { section: 'competitiveLandscape', score: 100, reasoning: '1/1 competitive insights backed by direct evidence', claimCount: 1, sourcedClaimCount: 1 },
+    { section: 'marketPosition', score: 100, reasoning: '1/1 market position claims backed by direct evidence', claimCount: 1, sourcedClaimCount: 1 },
+    { section: 'risks', score: 100, reasoning: '1/1 risk signals backed by direct evidence', claimCount: 1, sourcedClaimCount: 1 },
+    { section: 'keyPeople', score: 100, reasoning: '1/1 key people backed by direct evidence', claimCount: 1, sourcedClaimCount: 1 },
+  ],
 }
 
 export const SAMPLE_OPENAI_RESPONSE = JSON.stringify({
@@ -128,6 +177,7 @@ export const SAMPLE_OPENAI_RESPONSE = JSON.stringify({
   competitiveLandscape: SAMPLE_REPORT.competitiveLandscape,
   strategicRecommendations: SAMPLE_REPORT.strategicRecommendations,
   emails: SAMPLE_REPORT.emails,
+  sourceMap: SAMPLE_REPORT.sourceMap,
 })
 
 export const SAMPLE_HTML = `

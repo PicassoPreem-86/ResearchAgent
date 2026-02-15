@@ -21,6 +21,7 @@ import { TalentResults } from '@/components/TalentResults'
 import { HistorySidebar } from '@/components/HistorySidebar'
 import { WelcomeModal } from '@/components/WelcomeModal'
 import { PostResearchNudge } from '@/components/PostResearchNudge'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { useResearch } from '@/hooks/useResearch'
 import { useBulkResearch } from '@/hooks/useBulkResearch'
 import { useComparison } from '@/hooks/useComparison'
@@ -31,7 +32,9 @@ import { useOnboarding } from '@/hooks/useOnboarding'
 import { useAuth } from '@/hooks/useAuth'
 import { useUsage } from '@/hooks/useUsage'
 import { useWatchList } from '@/hooks/useWatchList'
+import { useSignals } from '@/hooks/useSignals'
 import { WatchList } from '@/components/WatchList'
+import { useAppStore } from '@/stores/appStore'
 import { EXAMPLE_REPORT } from '@/data/exampleReport'
 import { Search, Layers, Swords, Crosshair, UserSearch } from 'lucide-react'
 import { ErrorState } from '@/components/ErrorState'
@@ -118,9 +121,6 @@ function SingleResearchRoute({
   handleLoadExample,
   handleModeSwitch,
   recordResearch,
-  isWatching,
-  onWatch,
-  onUnwatch,
 }: {
   progress: ReturnType<typeof useResearch>['progress']
   report: ProspectReport | null
@@ -136,24 +136,24 @@ function SingleResearchRoute({
   handleLoadExample: () => void
   handleModeSwitch: (m: AppMode) => void
   recordResearch: () => void
-  isWatching?: boolean
-  onWatch?: (domain: string) => Promise<void>
-  onUnwatch?: (domain: string) => Promise<void>
 }) {
   const { domain } = useParams<{ domain: string }>()
   const navigate = useNavigate()
   const { history } = useHistory()
+  const watchList = useAppStore((s) => ({
+    isWatching: s.isWatching,
+    watchedDomains: s.watchedDomains,
+  }))
 
   const activeReport = loadedReport || report
+  const activeDomain = activeReport?.company?.domain ?? ''
 
-  // Track completed research for post-research nudges
   useEffect(() => {
     if (progress.stage === 'complete' && report) {
       recordResearch()
     }
   }, [progress.stage, report, recordResearch])
 
-  // Navigate to /research/{domain} when research completes
   useEffect(() => {
     if (progress.stage === 'complete' && report) {
       const d = report.company.domain
@@ -161,7 +161,6 @@ function SingleResearchRoute({
     }
   }, [progress.stage, report, navigate])
 
-  // Handle direct URL navigation to /research/:domain
   useEffect(() => {
     if (domain && !loadedReport && !report && !isResearching) {
       const found = history.find(
@@ -173,7 +172,6 @@ function SingleResearchRoute({
         startResearch(domain)
       }
     }
-    // Only run when domain or history changes, not on every render
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [domain, history.length])
 
@@ -243,9 +241,22 @@ function SingleResearchRoute({
           <ResultsPanel
             report={activeReport}
             onReset={handleResetFromResults}
-            isWatching={isWatching}
-            onWatch={onWatch}
-            onUnwatch={onUnwatch}
+            isWatching={watchList.isWatching(activeDomain)}
+            onWatch={async (d) => {
+              const entry = {
+                id: crypto.randomUUID(),
+                domain: d,
+                lastSnapshot: null,
+                lastCheckedAt: new Date().toISOString(),
+                createdAt: new Date().toISOString(),
+                lastChanges: null,
+              }
+              useAppStore.getState().addWatch(entry)
+            }}
+            onUnwatch={async (d) => {
+              const item = watchList.watchedDomains.find((w) => w.domain === d)
+              if (item) useAppStore.getState().removeWatch(item.id)
+            }}
           />
           {!isExampleReport && (
             <PostResearchNudge
@@ -540,9 +551,19 @@ function BulkRoute({
 export default function App() {
   const navigate = useNavigate()
   const mode = useCurrentMode()
-  const [historyOpen, setHistoryOpen] = useState(false)
   const [loadedReport, setLoadedReport] = useState<ProspectReport | null>(null)
-  const [showAuthModal, setShowAuthModal] = useState(false)
+  const [isExampleReport, setIsExampleReport] = useState(false)
+
+  // Zustand store
+  const authModalOpen = useAppStore((s) => s.authModalOpen)
+  const setAuthModalOpen = useAppStore((s) => s.setAuthModalOpen)
+  const watchListOpen = useAppStore((s) => s.watchListOpen)
+  const setWatchListOpen = useAppStore((s) => s.setWatchListOpen)
+  const historySidebarOpen = useAppStore((s) => s.historySidebarOpen)
+  const setHistorySidebarOpen = useAppStore((s) => s.setHistorySidebarOpen)
+  const watchedDomains = useAppStore((s) => s.watchedDomains)
+
+  // Hooks
   const { progress, report, error, isResearching, scrapeLog, startResearch, reset: resetSingle } = useResearch()
   const bulk = useBulkResearch()
   const comparison = useComparison()
@@ -553,9 +574,30 @@ export default function App() {
   const auth = useAuth()
   const usageTracker = useUsage(auth.user?.id)
   const watchList = useWatchList(auth.user?.id)
+  const signalsHook = useSignals()
   const [showWelcome, setShowWelcome] = useState(!hasSeenWelcome)
-  const [isExampleReport, setIsExampleReport] = useState(false)
-  const [watchListOpen, setWatchListOpen] = useState(false)
+
+  // Sync auth into store
+  useEffect(() => {
+    useAppStore.getState().setUser(
+      auth.user ? { id: auth.user.id, email: auth.user.email ?? '' } : null
+    )
+    useAppStore.getState().setSupabaseEnabled(auth.isSupabaseEnabled)
+  }, [auth.user, auth.isSupabaseEnabled])
+
+  // Sync watch list into store
+  useEffect(() => {
+    useAppStore.getState().setWatchedDomains(watchList.watched)
+  }, [watchList.watched])
+
+  // Sync usage into store
+  useEffect(() => {
+    if (usageTracker.enabled) {
+      useAppStore.getState().setUsageEnabled(true)
+      useAppStore.getState().setUsage(usageTracker.usage as unknown as Record<string, number>)
+      useAppStore.getState().setQuotas(usageTracker.quotas as unknown as Record<string, number>)
+    }
+  }, [usageTracker.enabled, usageTracker.usage, usageTracker.quotas])
 
   const handleReset = useCallback(() => {
     resetSingle()
@@ -594,11 +636,9 @@ export default function App() {
   const handleResearchFromDiscover = useCallback((domain: string) => {
     discover.reset()
     navigate('/research')
-    // Small delay so route mounts before starting research
     setTimeout(() => startResearch(domain), 50)
   }, [discover, navigate, startResearch])
 
-  // Determine if we're on an input screen (for showing mode selector)
   const showSingleInput = mode === 'single' && progress.stage === 'idle' && !loadedReport
   const showBulkInput = mode === 'bulk' && !bulk.isProcessing && !bulk.isComplete
   const showCompareInput = mode === 'compare' && comparison.progress.stage === 'idle' && !comparison.report
@@ -623,26 +663,34 @@ export default function App() {
         <div className="absolute bottom-0 right-0 w-[400px] h-[400px] bg-blue-600/[0.04] rounded-full blur-[100px]" />
       </div>
 
-      <Header
-        onToggleHistory={() => {
-          refreshHistory()
-          setHistoryOpen(!historyOpen)
-        }}
-        historyCount={history.length}
-        user={auth.user}
-        isAuthEnabled={auth.isSupabaseEnabled}
-        onSignInClick={() => setShowAuthModal(true)}
-        onSignOut={auth.signOut}
-        usage={usageTracker.enabled ? usageTracker.usage : undefined}
-        quotas={usageTracker.enabled ? usageTracker.quotas : undefined}
-        usageLabel={usageTracker.enabled ? usageTracker.getUsageLabel() : undefined}
-        watchCount={watchList.watched.length}
-        onToggleWatchList={() => setWatchListOpen(!watchListOpen)}
-      />
+      <ErrorBoundary>
+        <Header
+          onToggleHistory={() => {
+            refreshHistory()
+            setHistorySidebarOpen(!historySidebarOpen)
+          }}
+          historyCount={history.length}
+          user={auth.user}
+          isAuthEnabled={auth.isSupabaseEnabled}
+          onSignInClick={() => setAuthModalOpen(true)}
+          onSignOut={auth.signOut}
+          usage={usageTracker.enabled ? usageTracker.usage : undefined}
+          quotas={usageTracker.enabled ? usageTracker.quotas : undefined}
+          usageLabel={usageTracker.enabled ? usageTracker.getUsageLabel() : undefined}
+          watchCount={watchedDomains.length}
+          onToggleWatchList={() => setWatchListOpen(!watchListOpen)}
+          signals={signalsHook.signals}
+          signalUnreadCount={signalsHook.unreadCount}
+          signalsLoading={signalsHook.isLoading}
+          onSignalMarkRead={signalsHook.markRead}
+          onSignalDismissAll={signalsHook.dismissAll}
+          onSignalRefresh={signalsHook.refresh}
+        />
+      </ErrorBoundary>
 
-      {showAuthModal && (
+      {authModalOpen && (
         <AuthModal
-          onClose={() => setShowAuthModal(false)}
+          onClose={() => setAuthModalOpen(false)}
           onSignIn={auth.signInWithEmail}
           onSignUp={auth.signUpWithEmail}
           onGoogleSignIn={auth.signInWithGoogle}
@@ -650,25 +698,34 @@ export default function App() {
         />
       )}
 
-      <WatchList
-        isOpen={watchListOpen}
-        onClose={() => setWatchListOpen(false)}
-        watched={watchList.watched}
-        onRemove={(id) => watchList.removeFromWatchList(id)}
-        onViewReport={(domain) => {
-          setWatchListOpen(false)
-          navigate(`/research/${encodeURIComponent(domain)}`)
-        }}
-      />
+      <ErrorBoundary>
+        <WatchList
+          isOpen={watchListOpen}
+          onClose={() => setWatchListOpen(false)}
+          watched={watchList.watched}
+          onRemove={(id) => {
+            useAppStore.getState().removeWatch(id)
+            watchList.removeFromWatchList(id)
+          }}
+          onViewReport={(domain) => {
+            setWatchListOpen(false)
+            navigate(`/research/${encodeURIComponent(domain)}`)
+          }}
+          onCheckOne={watchList.checkForChanges}
+          onCheckAll={watchList.checkAllForChanges}
+          isChecking={watchList.isChecking}
+          isCheckingAny={watchList.isCheckingAny}
+        />
 
-      <HistorySidebar
-        isOpen={historyOpen}
-        onClose={() => setHistoryOpen(false)}
-        history={history}
-        isLoading={historyLoading}
-        onLoadReport={handleLoadReport}
-        onDeleteReport={deleteHistoryReport}
-      />
+        <HistorySidebar
+          isOpen={historySidebarOpen}
+          onClose={() => setHistorySidebarOpen(false)}
+          history={history}
+          isLoading={historyLoading}
+          onLoadReport={handleLoadReport}
+          onDeleteReport={deleteHistoryReport}
+        />
+      </ErrorBoundary>
 
       <main className="relative z-10 px-4 sm:px-6 pt-24 pb-16">
         <AnimatePresence>
@@ -677,97 +734,92 @@ export default function App() {
           )}
         </AnimatePresence>
 
-        <Routes>
-          <Route
-            path="/"
-            element={
-              <AnimatePresence mode="wait">
-                <motion.div
-                  key="home-input"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0, y: -20 }}
-                  transition={{ duration: 0.4 }}
-                  className="flex items-center justify-center min-h-[calc(100vh-12rem)]"
-                >
-                  <SearchInput onSearch={(domain) => {
-                    startResearch(domain)
-                    navigate('/research')
-                  }} isLoading={false} onLoadExample={handleLoadExample} />
-                </motion.div>
-              </AnimatePresence>
-            }
-          />
-          <Route
-            path="/research/:domain?"
-            element={
-              <SingleResearchRoute
-                progress={progress}
-                report={report}
-                error={error}
-                isResearching={isResearching}
-                scrapeLog={scrapeLog}
-                startResearch={startResearch}
-                resetSingle={resetSingle}
-                loadedReport={loadedReport}
-                setLoadedReport={setLoadedReport}
-                isExampleReport={isExampleReport}
-                handleResetFromResults={handleResetFromResults}
-                handleLoadExample={handleLoadExample}
-                handleModeSwitch={handleModeSwitch}
-                recordResearch={recordResearch}
-                isWatching={watchList.isWatching((loadedReport || report)?.company?.domain ?? '')}
-                onWatch={(d) => watchList.addToWatchList(d)}
-                onUnwatch={async (d) => {
-                  const item = watchList.watched.find((w) => w.domain === d)
-                  if (item) await watchList.removeFromWatchList(item.id)
-                }}
-              />
-            }
-          />
-          <Route
-            path="/compare"
-            element={
-              <CompareRoute
-                comparison={comparison}
-                handleResetFromResults={handleResetFromResults}
-                handleReset={handleReset}
-              />
-            }
-          />
-          <Route
-            path="/discover"
-            element={
-              <DiscoverRoute
-                discover={discover}
-                handleResetFromResults={handleResetFromResults}
-                handleReset={handleReset}
-                handleResearchFromDiscover={handleResearchFromDiscover}
-              />
-            }
-          />
-          <Route
-            path="/talent"
-            element={
-              <TalentRoute
-                talent={talent}
-                handleResetFromResults={handleResetFromResults}
-                handleReset={handleReset}
-              />
-            }
-          />
-          <Route
-            path="/bulk"
-            element={
-              <BulkRoute
-                bulk={bulk}
-                handleResetFromResults={handleResetFromResults}
-              />
-            }
-          />
-          {/* Catch-all: redirect to home */}
-          <Route path="*" element={<CatchAll />} />
-        </Routes>
+        <ErrorBoundary>
+          <Routes>
+            <Route
+              path="/"
+              element={
+                <AnimatePresence mode="wait">
+                  <motion.div
+                    key="home-input"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0, y: -20 }}
+                    transition={{ duration: 0.4 }}
+                    className="flex items-center justify-center min-h-[calc(100vh-12rem)]"
+                  >
+                    <SearchInput onSearch={(domain) => {
+                      startResearch(domain)
+                      navigate('/research')
+                    }} isLoading={false} onLoadExample={handleLoadExample} />
+                  </motion.div>
+                </AnimatePresence>
+              }
+            />
+            <Route
+              path="/research/:domain?"
+              element={
+                <SingleResearchRoute
+                  progress={progress}
+                  report={report}
+                  error={error}
+                  isResearching={isResearching}
+                  scrapeLog={scrapeLog}
+                  startResearch={startResearch}
+                  resetSingle={resetSingle}
+                  loadedReport={loadedReport}
+                  setLoadedReport={setLoadedReport}
+                  isExampleReport={isExampleReport}
+                  handleResetFromResults={handleResetFromResults}
+                  handleLoadExample={handleLoadExample}
+                  handleModeSwitch={handleModeSwitch}
+                  recordResearch={recordResearch}
+                />
+              }
+            />
+            <Route
+              path="/compare"
+              element={
+                <CompareRoute
+                  comparison={comparison}
+                  handleResetFromResults={handleResetFromResults}
+                  handleReset={handleReset}
+                />
+              }
+            />
+            <Route
+              path="/discover"
+              element={
+                <DiscoverRoute
+                  discover={discover}
+                  handleResetFromResults={handleResetFromResults}
+                  handleReset={handleReset}
+                  handleResearchFromDiscover={handleResearchFromDiscover}
+                />
+              }
+            />
+            <Route
+              path="/talent"
+              element={
+                <TalentRoute
+                  talent={talent}
+                  handleResetFromResults={handleResetFromResults}
+                  handleReset={handleReset}
+                />
+              }
+            />
+            <Route
+              path="/bulk"
+              element={
+                <BulkRoute
+                  bulk={bulk}
+                  handleResetFromResults={handleResetFromResults}
+                />
+              }
+            />
+            <Route path="*" element={<CatchAll />} />
+          </Routes>
+        </ErrorBoundary>
       </main>
     </div>
   )

@@ -1,26 +1,121 @@
 import type { ScrapedCompanyData } from './scraper.js'
 
 interface CacheEntry<T> {
-  data: T
-  cachedAt: number
+  key: string
+  value: T
   expiresAt: number
+  prev: CacheEntry<T> | null
+  next: CacheEntry<T> | null
 }
 
-const TTL = 30 * 60 * 1000 // 30 minutes
+class LRUCache<T> {
+  private map = new Map<string, CacheEntry<T>>()
+  private head: CacheEntry<T> | null = null
+  private tail: CacheEntry<T> | null = null
+  private maxSize: number
+  private defaultTTL: number
+  private hits = 0
+  private misses = 0
 
-const store = new Map<string, CacheEntry<ScrapedCompanyData>>()
-let hits = 0
-let misses = 0
-
-// Clean up expired entries every 5 minutes
-setInterval(() => {
-  const now = Date.now()
-  for (const [key, entry] of store) {
-    if (entry.expiresAt <= now) {
-      store.delete(key)
-    }
+  constructor(maxSize = 500, defaultTTL = 30 * 60 * 1000) {
+    this.maxSize = maxSize
+    this.defaultTTL = defaultTTL
   }
-}, 5 * 60 * 1000).unref()
+
+  get(key: string): T | undefined {
+    const entry = this.map.get(key)
+    if (!entry) {
+      this.misses++
+      return undefined
+    }
+    if (Date.now() > entry.expiresAt) {
+      this.delete(key)
+      this.misses++
+      return undefined
+    }
+    this.hits++
+    this.moveToFront(entry)
+    return entry.value
+  }
+
+  set(key: string, value: T, ttl?: number): void {
+    if (this.map.has(key)) {
+      this.delete(key)
+    }
+    while (this.map.size >= this.maxSize) {
+      this.evictLRU()
+    }
+    const entry: CacheEntry<T> = {
+      key,
+      value,
+      expiresAt: Date.now() + (ttl || this.defaultTTL),
+      prev: null,
+      next: this.head,
+    }
+    if (this.head) this.head.prev = entry
+    this.head = entry
+    if (!this.tail) this.tail = entry
+    this.map.set(key, entry)
+  }
+
+  delete(key: string): boolean {
+    const entry = this.map.get(key)
+    if (!entry) return false
+    this.unlink(entry)
+    this.map.delete(key)
+    return true
+  }
+
+  clear(): void {
+    this.map.clear()
+    this.head = null
+    this.tail = null
+    this.hits = 0
+    this.misses = 0
+  }
+
+  get size(): number {
+    return this.map.size
+  }
+
+  getStats(): { size: number; hits: number; misses: number; maxSize: number } {
+    return { size: this.map.size, hits: this.hits, misses: this.misses, maxSize: this.maxSize }
+  }
+
+  private moveToFront(entry: CacheEntry<T>): void {
+    if (entry === this.head) return
+    this.unlink(entry)
+    entry.prev = null
+    entry.next = this.head
+    if (this.head) this.head.prev = entry
+    this.head = entry
+    if (!this.tail) this.tail = entry
+  }
+
+  private unlink(entry: CacheEntry<T>): void {
+    if (entry.prev) {
+      entry.prev.next = entry.next
+    } else {
+      this.head = entry.next
+    }
+    if (entry.next) {
+      entry.next.prev = entry.prev
+    } else {
+      this.tail = entry.prev
+    }
+    entry.prev = null
+    entry.next = null
+  }
+
+  private evictLRU(): void {
+    if (!this.tail) return
+    const key = this.tail.key
+    this.unlink(this.tail)
+    this.map.delete(key)
+  }
+}
+
+const cache = new LRUCache<ScrapedCompanyData>(500, 30 * 60 * 1000)
 
 function normalizeDomain(domain: string): string {
   return domain.toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim()
@@ -28,43 +123,26 @@ function normalizeDomain(domain: string): string {
 
 export function getCached(domain: string): ScrapedCompanyData | null {
   const key = normalizeDomain(domain)
-  const entry = store.get(key)
-
-  if (!entry) {
-    misses++
-    return null
-  }
-
-  if (entry.expiresAt <= Date.now()) {
-    store.delete(key)
-    misses++
-    return null
-  }
-
-  hits++
-  return entry.data
+  return cache.get(key) ?? null
 }
 
 export function setCache(domain: string, data: ScrapedCompanyData): void {
   const key = normalizeDomain(domain)
-  const now = Date.now()
-  store.set(key, {
-    data,
-    cachedAt: now,
-    expiresAt: now + TTL,
-  })
+  cache.set(key, data)
 }
 
 export function clearCache(domain?: string): void {
   if (domain) {
-    store.delete(normalizeDomain(domain))
+    cache.delete(normalizeDomain(domain))
   } else {
-    store.clear()
-    hits = 0
-    misses = 0
+    cache.clear()
   }
 }
 
 export function getCacheStats(): { size: number; hits: number; misses: number } {
-  return { size: store.size, hits, misses }
+  const stats = cache.getStats()
+  return { size: stats.size, hits: stats.hits, misses: stats.misses }
 }
+
+// Export for testing
+export { LRUCache }

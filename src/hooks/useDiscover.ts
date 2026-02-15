@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import type { ICP, DiscoverResults, ResearchStage, GeoTarget } from '@/types/prospect'
 
 interface DiscoverProgress {
@@ -25,71 +25,40 @@ const INITIAL_PROGRESS: DiscoverProgress = {
   progress: 0,
 }
 
-function readSSEStream(
-  reader: ReadableStreamDefaultReader<Uint8Array>,
-  onProgress: (data: DiscoverProgress) => void,
-  onComplete: (results: DiscoverResults) => void,
-  onError: (message: string) => void,
-): Promise<void> {
-  const decoder = new TextDecoder()
-  let buffer = ''
-
-  const read = (): Promise<void> => {
-    return reader.read().then(({ done, value }) => {
-      if (done) return
-
-      buffer += decoder.decode(value, { stream: true })
-      const lines = buffer.split('\n')
-      buffer = lines.pop() || ''
-
-      for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          try {
-            const data = JSON.parse(line.slice(6))
-
-            if (data.stage === 'complete' && data.data) {
-              onComplete(data.data as DiscoverResults)
-            } else if (data.stage === 'error') {
-              onError(data.message || 'Something went wrong')
-            } else if (data.stage && data.message !== undefined) {
-              onProgress({
-                stage: data.stage as ResearchStage,
-                message: data.message,
-                progress: data.progress ?? 0,
-              })
-            }
-          } catch {
-            // skip malformed lines
-          }
-        }
-      }
-
-      return read()
-    })
-  }
-
-  return read()
-}
-
 export function useDiscover(): UseDiscoverReturn {
   const [progress, setProgress] = useState<DiscoverProgress>(INITIAL_PROGRESS)
   const [results, setResults] = useState<DiscoverResults | null>(null)
   const [error, setError] = useState<string | null>(null)
   const abortRef = useRef<AbortController | null>(null)
+  const readerRef = useRef<ReadableStreamDefaultReader | null>(null)
+  const isMountedRef = useRef(true)
+
+  useEffect(() => {
+    isMountedRef.current = true
+    return () => {
+      isMountedRef.current = false
+      abortRef.current?.abort()
+      readerRef.current?.cancel().catch(() => {})
+    }
+  }, [])
 
   const isSearching = !['idle', 'complete', 'error'].includes(progress.stage)
 
   const reset = useCallback(() => {
-    if (abortRef.current) {
-      abortRef.current.abort()
-      abortRef.current = null
-    }
+    abortRef.current?.abort()
+    abortRef.current = null
+    readerRef.current?.cancel().catch(() => {})
+    readerRef.current = null
     setProgress(INITIAL_PROGRESS)
     setResults(null)
     setError(null)
   }, [])
 
   const streamRequest = useCallback((url: string, body: unknown) => {
+    // Cancel previous request
+    abortRef.current?.abort()
+    readerRef.current?.cancel().catch(() => {})
+
     setError(null)
     setResults(null)
     setProgress({ stage: 'scraping', message: 'Starting discovery...', progress: 5 })
@@ -110,22 +79,55 @@ export function useDiscover(): UseDiscoverReturn {
 
         const reader = response.body?.getReader()
         if (!reader) throw new Error('No response stream')
+        readerRef.current = reader
 
-        return readSSEStream(
-          reader,
-          (prog) => setProgress(prog),
-          (data) => {
-            setResults(data)
-            setProgress({ stage: 'complete', message: 'Discovery complete', progress: 100 })
-          },
-          (msg) => {
-            setError(msg)
-            setProgress({ stage: 'error', message: msg, progress: 0 })
-          },
-        )
+        const decoder = new TextDecoder()
+        let buffer = ''
+
+        const read = (): Promise<void> => {
+          return reader.read().then(({ done, value }) => {
+            if (done || !isMountedRef.current) return
+
+            buffer += decoder.decode(value, { stream: true })
+            const lines = buffer.split('\n')
+            buffer = lines.pop() || ''
+
+            for (const line of lines) {
+              if (!isMountedRef.current) break
+              if (line.startsWith('data: ')) {
+                try {
+                  const data = JSON.parse(line.slice(6))
+
+                  if (data.stage === 'complete' && data.data) {
+                    setResults(data.data as DiscoverResults)
+                    setProgress({ stage: 'complete', message: 'Discovery complete', progress: 100 })
+                  } else if (data.stage === 'error') {
+                    setError(data.message || 'Something went wrong')
+                    setProgress({ stage: 'error', message: data.message, progress: 0 })
+                  } else if (data.stage && data.message !== undefined) {
+                    setProgress({
+                      stage: data.stage as ResearchStage,
+                      message: data.message,
+                      progress: data.progress ?? 0,
+                    })
+                  }
+                } catch {
+                  // skip malformed lines
+                }
+              }
+            }
+
+            return read()
+          })
+        }
+
+        return read().finally(() => {
+          readerRef.current = null
+        })
       })
       .catch((err) => {
-        if (err.name === 'AbortError') return
+        if (err instanceof Error && err.name === 'AbortError') return
+        if (!isMountedRef.current) return
         setError(err.message || 'Something went wrong')
         setProgress({ stage: 'error', message: err.message, progress: 0 })
       })

@@ -211,4 +211,47 @@ export const EXAMPLE_REPORT: ProspectReport = {
   ],
   template: 'general',
   researchedAt: new Date().toISOString(),
+  sourceMap: {
+    painPoints: [
+      { claim: 'Enterprise sales complexity from job postings', source: 'careers', extractedAt: new Date().toISOString(), confidence: 'high' },
+      { claim: 'Regulatory expansion across 46+ countries', source: 'about', extractedAt: new Date().toISOString(), confidence: 'high' },
+      { claim: 'Developer experience complexity at scale', source: 'homepage', extractedAt: new Date().toISOString(), confidence: 'medium' },
+    ],
+    financialSignals: [
+      { claim: 'Series I funding at $50B valuation', source: 'news', extractedAt: new Date().toISOString(), confidence: 'high' },
+      { claim: '$14B+ annual revenue estimate', source: 'inferred', extractedAt: new Date().toISOString(), confidence: 'medium' },
+    ],
+    competitiveLandscape: [
+      { claim: 'Adyen competing in enterprise space', source: 'inferred', extractedAt: new Date().toISOString(), confidence: 'medium' },
+    ],
+    marketPosition: [
+      { claim: 'Developer-first API positioning', source: 'homepage', extractedAt: new Date().toISOString(), confidence: 'high' },
+    ],
+    risks: [
+      { claim: 'Regulatory exposure in 46+ markets', source: 'about', extractedAt: new Date().toISOString(), confidence: 'high' },
+    ],
+    keyPeople: [
+      { claim: 'Patrick Collison is CEO', source: 'about', extractedAt: new Date().toISOString(), confidence: 'high' },
+      { claim: 'John Collison is President', source: 'about', extractedAt: new Date().toISOString(), confidence: 'high' },
+    ],
+  },
+  dataFreshness: {
+    oldestSource: new Date().toISOString(),
+    newestSource: new Date().toISOString(),
+    sources: [
+      { url: 'https://stripe.com', fetchedAt: new Date().toISOString(), category: 'homepage', charCount: 5000 },
+      { url: 'https://stripe.com/about', fetchedAt: new Date().toISOString(), category: 'about', charCount: 3000 },
+      { url: 'https://stripe.com/careers', fetchedAt: new Date().toISOString(), category: 'careers', charCount: 4000 },
+    ],
+    totalPagesFetched: 5,
+    totalPagesSuccessful: 3,
+  },
+  sectionConfidence: [
+    { section: 'painPoints', score: 100, reasoning: '3/3 pain points backed by direct evidence', claimCount: 3, sourcedClaimCount: 3 },
+    { section: 'financialSignals', score: 50, reasoning: '1/2 financial signals backed by direct evidence', claimCount: 2, sourcedClaimCount: 1 },
+    { section: 'competitiveLandscape', score: 100, reasoning: '1/1 competitive insights backed by direct evidence', claimCount: 1, sourcedClaimCount: 1 },
+    { section: 'marketPosition', score: 100, reasoning: '1/1 market position claims backed by direct evidence', claimCount: 1, sourcedClaimCount: 1 },
+    { section: 'risks', score: 100, reasoning: '1/1 risk signals backed by direct evidence', claimCount: 1, sourcedClaimCount: 1 },
+    { section: 'keyPeople', score: 100, reasoning: '2/2 key people backed by direct evidence', claimCount: 2, sourcedClaimCount: 2 },
+  ],
 }

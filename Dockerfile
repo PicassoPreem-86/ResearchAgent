@@ -18,6 +18,9 @@ COPY --from=builder /app/src/types ./src/types
 COPY --from=builder /app/tsconfig.json ./
 COPY --from=builder /app/tsconfig.server.json ./
 
+RUN chown -R node:node /app
+USER node
+
 ENV NODE_ENV=production
 ENV PORT=3001
 EXPOSE 3001

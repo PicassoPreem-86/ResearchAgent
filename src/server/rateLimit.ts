@@ -24,8 +24,9 @@ export function createRateLimiter(config: RateLimitConfig) {
   }, 60_000).unref()
 
   return async (c: Context, next: Next) => {
-    const forwarded = c.req.header('x-forwarded-for')
-    const ip = forwarded?.split(',')[0].trim() || 'unknown'
+    const ip = c.req.header('cf-connecting-ip')
+      || c.req.header('x-real-ip')
+      || 'unknown'
     const now = Date.now()
 
     const entry = store.get(ip)

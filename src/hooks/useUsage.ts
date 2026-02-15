@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback } from 'react'
-import { supabase, isSupabaseConfigured } from '@/lib/supabase'
 
 interface UsageStats {
   researches: number
@@ -15,67 +14,56 @@ interface Quotas {
   talents: number
 }
 
-const FREE_QUOTAS: Quotas = {
-  researches: 10,
-  comparisons: 3,
-  discovers: 5,
-  talents: 5,
-}
-
 export function useUsage(userId?: string) {
   const [usage, setUsage] = useState<UsageStats>({ researches: 0, comparisons: 0, discovers: 0, talents: 0 })
+  const [quotas, setQuotas] = useState<Quotas>({ researches: 10, comparisons: 3, discovers: 5, talents: 5 })
   const [isLoading, setIsLoading] = useState(false)
-  const enabled = isSupabaseConfigured() && !!userId
-  const quotas = FREE_QUOTAS
+  const enabled = !!userId
 
   const refresh = useCallback(async () => {
-    if (!enabled || !supabase) return
     setIsLoading(true)
     try {
-      // Get usage for current month
-      const startOfMonth = new Date()
-      startOfMonth.setDate(1)
-      startOfMonth.setHours(0, 0, 0, 0)
-
-      const { data, error } = await supabase
-        .from('usage_events')
-        .select('event_type')
-        .eq('user_id', userId!)
-        .gte('created_at', startOfMonth.toISOString())
-
-      if (error) throw error
-
-      const counts: UsageStats = { researches: 0, comparisons: 0, discovers: 0, talents: 0 }
-      for (const row of data ?? []) {
-        if (row.event_type === 'research') counts.researches++
-        else if (row.event_type === 'compare') counts.comparisons++
-        else if (row.event_type === 'discover') counts.discovers++
-        else if (row.event_type === 'talent') counts.talents++
+      const res = await fetch('/api/usage')
+      if (res.ok) {
+        const data = await res.json()
+        setUsage({
+          researches: data.research ?? 0,
+          comparisons: data.compare ?? 0,
+          discovers: data.discover ?? 0,
+          talents: data.talent ?? 0,
+        })
+        if (data.quotas) {
+          setQuotas({
+            researches: data.quotas.research ?? Infinity,
+            comparisons: data.quotas.compare ?? Infinity,
+            discovers: data.quotas.discover ?? Infinity,
+            talents: data.quotas.talent ?? Infinity,
+          })
+        }
       }
-      setUsage(counts)
+    } catch {
+      // Fallback: keep current local state
     } finally {
       setIsLoading(false)
     }
-  }, [enabled, userId])
+  }, [])
 
   useEffect(() => {
     refresh()
   }, [refresh])
 
   const trackUsage = useCallback(
-    async (eventType: string, domain?: string) => {
-      if (!supabase || !userId) return
-      await supabase
-        .from('usage_events')
-        .insert({ user_id: userId, event_type: eventType, domain: domain ?? null })
+    async (_eventType: string, _domain?: string) => {
+      // Server records usage via quota middleware after successful requests.
+      // Just refresh client-side counts.
       await refresh()
     },
-    [supabase, userId, refresh]
+    [refresh]
   )
 
   const canUse = useCallback(
     (eventType: string): boolean => {
-      if (!enabled) return true // No limits when Supabase isn't configured
+      if (!enabled) return true
       switch (eventType) {
         case 'research': return usage.researches < quotas.researches
         case 'compare': return usage.comparisons < quotas.comparisons
