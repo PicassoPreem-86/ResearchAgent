@@ -4,7 +4,9 @@ import * as schema from "./schema.js";
 import { logger } from "../logger.js";
 import path from "path";
 
-const DB_PATH = path.resolve(process.cwd(), "gxt-agent.db");
+const DB_PATH = process.env.DB_PATH
+  ? path.resolve(process.env.DB_PATH)
+  : path.resolve(process.cwd(), "gxt-agent.db");
 
 let db: ReturnType<typeof createDb> | null = null;
 

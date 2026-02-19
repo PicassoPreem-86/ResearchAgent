@@ -45,6 +45,7 @@ export function PriceChart({ symbol, timeframe, onTimeframeChange, keyLevels, fv
 
   const { data: bars, isLoading: barsLoading } = useBars(symbol, timeframe);
   const { data: quote } = useQuote(symbol);
+  const hasBars = bars && bars.length > 0;
 
   const initChart = useCallback(() => {
     if (!chartContainerRef.current) return;
@@ -254,7 +255,7 @@ export function PriceChart({ symbol, timeframe, onTimeframeChange, keyLevels, fv
       {/* Chart */}
       <div className="relative flex-1 min-h-[400px]">
         <div ref={chartContainerRef} className="absolute inset-0" />
-        {barsLoading && !bars?.length && (
+        {barsLoading && !hasBars && (
           <div className="absolute inset-0 flex items-center justify-center bg-surface-1">
             <div className="w-full h-full p-6 space-y-3 animate-pulse">
               <div className="h-3 bg-zinc-800 rounded w-1/4" />

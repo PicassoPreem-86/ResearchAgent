@@ -1,0 +1,23 @@
+services:
+  agent:
+    build: .
+    container_name: gxt-agent
+    restart: unless-stopped
+    ports:
+      - "3377:3377"
+    volumes:
+      - agent-data:/app/data
+    env_file:
+      - .env.production
+    environment:
+      - NODE_ENV=production
+      - API_PORT=3377
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3377/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  agent-data:

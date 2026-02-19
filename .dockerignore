@@ -5,6 +5,6 @@ dist/
 *.db-shm
 *.db-wal
 .env
-.env.production
-*.log
+.git/
 .DS_Store
+*.log

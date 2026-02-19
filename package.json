@@ -12,6 +12,7 @@
     "build": "vite build && tsc --noEmit",
     "preview": "vite preview",
     "lint": "eslint src --ext .ts,.tsx",
+    "start": "NODE_ENV=production tsx src/index.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate"
   },
